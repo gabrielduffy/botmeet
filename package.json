@@ -1,0 +1,33 @@
+{
+  "name": "meeting-bot",
+  "version": "1.0.0",
+  "description": "Bot automático para gravar e transcrever reuniões do Google Meet",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "auth": "node scripts/generate-token.js",
+    "test": "node src/test-bot.js",
+    "test:calendar": "node src/test-calendar.js",
+    "test:meet": "node src/test-meet.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "puppeteer-core": "^22.0.0",
+    "googleapis": "^130.0.0",
+    "node-cron": "^3.0.3",
+    "axios": "^1.6.5",
+    "dotenv": "^16.3.1",
+    "fluent-ffmpeg": "^2.1.2",
+    "uuid": "^9.0.0",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "GNX Brasil",
+  "license": "MIT"
+}
