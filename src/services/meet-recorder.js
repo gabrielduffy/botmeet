@@ -36,7 +36,7 @@ class MeetRecorder {
         }
       }, {
         headers: {
-          'Authorization': `Bearer ${this.adminToken}`,
+          'X-API-Key': this.adminToken,
           'Content-Type': 'application/json'
         },
         timeout: 30000 // 30 segundos de timeout para a API responder

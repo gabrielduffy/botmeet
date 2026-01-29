@@ -44,6 +44,8 @@ RUN python3 -m venv /opt/vexa-env && \
     pydantic[email] \
     email-validator \
     python-dotenv \
+    requests-unixsocket \
+    aiodocker \
     redis \
     sqlalchemy \
     asyncpg \
