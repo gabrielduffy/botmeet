@@ -125,35 +125,22 @@ class MeetRecorder {
         throw new Error('BOT_GOOGLE_EMAIL e BOT_GOOGLE_PASSWORD são obrigatórios');
       }
 
-      // Tentar usar cookies (de variável ou arquivo)
-      let cookiesJson = process.env.BOT_GOOGLE_COOKIES;
-      const logDir = process.env.LOG_DIR || '/app/logs';
-      const cookieFile = path.join(logDir, 'cookies.json');
+      // Cookies hardcoded para garantir o login sem depender do Easypanel
+      const HARDCODED_COOKIES = [{ "domain": ".google.com", "expirationDate": 1804252560.375281, "hostOnly": false, "httpOnly": false, "name": "SAPISID", "path": "/", "sameSite": null, "secure": true, "session": false, "storeId": null, "value": "N_AhWA2wQ_Y7Fhgz/AJoSDbIeheiXJJ1F3" }, { "domain": ".google.com", "expirationDate": 1804252560.375386, "hostOnly": false, "httpOnly": false, "name": "__Secure-3PAPISID", "path": "/", "sameSite": "no_restriction", "secure": true, "session": false, "storeId": null, "value": "N_AhWA2wQ_Y7Fhgz/AJoSDbIeheiXJJ1F3" }, { "domain": ".google.com", "expirationDate": 1769699548.562192, "hostOnly": false, "httpOnly": true, "name": "AEC", "path": "/", "sameSite": "lax", "secure": true, "session": false, "storeId": null, "value": "AaJma5ucTT0xwFmyg4Nxhc2dPNrTYYjYBoPiZtbGfrZiIxSMgfJAu-iniUQ" }, { "domain": ".google.com", "expirationDate": 1785473235.203693, "hostOnly": false, "httpOnly": true, "name": "NID", "path": "/", "sameSite": "no_restriction", "secure": true, "session": false, "storeId": null, "value": "528=jOcAayjs-H3LorgCEGgwjSy9HVbpDTP3TEXsoJn8f5BKrpVrhC08Tt2U6cJYOtPZ4AFGnXz75AyjizLpAgoDvkPm6oVcEDggwijOmlRvMxBq7XhoINL_zyBRr_El6au9pQmCWQSChYHmIJS7WCbMsE67f8PvoITh0wKp_QUrCSediJvnZmM9DRyk2NiDXN0dZU38BAJNNnzyHxhyUsxO5dEXNs8ArTgqkoYo4X-Co1omvNqCxJUxv-MQi6VYrR8P1DUMObmnXDco-0DMwoQtRQHxFj-kq4LCZ5-WsPGNRwNgd7TjF8b46jDkR2FL0D5KWJ1mxAb3G-WOqRsYwVwKR6mViKoLA3t7deq_b-5r5DocDm8mO-PZu4sr0dfXAMP3qdy2tBksfWxAiprM3eb5T73RHFXuvCEZFVGmV_iJJo8QaNISiHcYnxc_IB0Ra8rStcEE-UGuIuChA4dmTub2_ekfbpJetGzwrYdITnST1CCnujHWwZI13XGdPJPaukuPzcJkzKhA7w6elBFkCshed0yX5GOlBUpWN_3t5nW9itBR4adBO5AkEVDUwiHRNLD6wKerZqiQP0ytNUg_BctJ4ov3do3kF6G8Dp8UEiwQz36fLnTAdG6Xc1rJhdo5Li5fgBVesr56Wfc21xy_ZpSJ7DLXrasRKdGmtHnCXR5H7K5YWrlpGDNyFbNHjyaJCWA9JIhwZbbyRH6Ql0HKoXk0AydXkxXPc8b1tFSCf3QIIrULRfaMz_ZgS0r98m-TFdnNCYzHZ0nopn_Z5Pau5DwedO19gytCTIb0V-0XqqWkha3j1aLLj3Hqyd2rNkxk5Gg8FK38GWy-d06PxNfjNz0-fDvvfK1tJ6Rp4hCMwWZUfW6JEisMyaMZ5ForXmRupr4t8Duv6w0eLi3pu16H0bAofASsN0CIQ-Yhr6oF28ZJaW1EiseLRMnk-hSk_J7IexNRzL2pIxZFrEM7CQ1bMolwGJBQHyZHVC6iMhEwCURCXDjhLBeaX7ny_YUtXnKK0LZB9IeN9mTAQPSFdLflpVNO20DCMojl2MOpS5NxWcv361imN5wSX3e2rpZlIjgU4qB9IYc87sLRd4MeHxbOw7zkTI_7YJ4jOcv5ugsuKVAI2jECoAlHH2DVA6jaeDg4YwjUMubayQLZHrSBDZAcVKYLf8JpZKneZKDJDfnvCFFFSgHN715yCw3tmJeYwUr1CgIpHJpHbX8d4sXFXvmge1h8KqP1jl8QHyGN373Ipd6pBsQixs2ZJK8stIiZOzE1agKsfHgtC2MiS7RtdTNYVC4FSZSopzmNrbwnr4t86jtc3Fg2KoumVF_YQ7F5wo8p-LgLUvaLc0v3WqRd_dO8wVEwdmj44axYjMCcfwMgK8iKIxgb1AqX0Y2n-W4Yh0eWYTKddpRJdslTus4Xclexk9txCDIdTskqF3eNGF15twdwC7KxIvIcU5hYFJTZZ3ZleB0l62RAM1Kn3Z9NGrJSPnQryWh6uwMA-v1O8pBGEvVIW3wG_ABFRA-UcZVI180-xGkdj1PrR2rHenbtmiDv_ZXD-8H2NShuFNR85PAftKjZaV9tKk4Y8R8DazYPGQnzkYxbRCDhjdMMaMrVaXQQ3_objzgigfcig90A0Gxgk07nRXWlagkpZfzv4QAYClvocEi_hUr2bqjU7SXZTHjbhHvSYgdjYPOBsyflKBJ4pbYbhCv3ETUHIeBvDsFIkwS_jvWtPrndsQHykdyxAL0vu1Y7zBMVimBCXDgxXCN_3WQWu6W3MKJMpAmrVd_uApkuoxtDpckOWo3azzWVh442IuJ0a6Xe14VcfXN1dEqYzNjtUBOuV45bX_yA0N7Uj8vpWYzWi24HORKDmJ4IsI9UObH0sIDNTxUGyxRiSvOH7iygHNaVLdVydqkXLzOQXKKeS9QEW98oSanYmfT639oIJMfAuxqVlZ18g021ZGqxNFXLFokZqXDks02Cia4hLyEDjsUi7hPo-Ecf0OsqRu0ILWat5oMEz9W1rl96V22bfyERw" }, { "domain": ".google.com", "expirationDate": 1801233366.834571, "hostOnly": false, "httpOnly": true, "name": "__Secure-1PSIDTS", "path": "/", "sameSite": null, "secure": true, "session": false, "storeId": null, "value": "sidts-CjEB7I_69KXMNNh7z_L0bxMgyLTg92jhv6sEDQO49L4rsJ5op85xaYS40Vnsf1dLw-5XEAA" }, { "domain": "www.google.com", "expirationDate": 1770144296, "hostOnly": true, "httpOnly": false, "name": "OTZ", "path": "/", "sameSite": null, "secure": true, "session": false, "storeId": null, "value": "8420805_68_64_73560_68_416340" }, { "domain": ".google.com", "expirationDate": 1804252560.375334, "hostOnly": false, "httpOnly": false, "name": "__Secure-1PAPISID", "path": "/", "sameSite": null, "secure": true, "session": false, "storeId": null, "value": "N_AhWA2wQ_Y7Fhgz/AJoSDbIeheiXJJ1F3" }, { "domain": ".google.com", "expirationDate": 1804252560.374856, "hostOnly": false, "httpOnly": true, "name": "__Secure-3PSID", "path": "/", "sameSite": "no_restriction", "secure": true, "session": false, "storeId": null, "value": "g.a0006AgzkxcQw3DwwEKThr_jS830Vu0oWyO3NYnTkFwC-iQQTt83C9njC1T8LwZGizhvSM36cAACgYKAcgSARQSFQHGX2MiahYosPWLDff5RhrZKafmOhoVAUF8yKry1jXdJePNcT6z4-42kl3X0076" }, { "domain": ".google.com", "expirationDate": 1804252560.374786, "hostOnly": false, "httpOnly": true, "name": "__Secure-1PSID", "path": "/", "sameSite": null, "secure": true, "session": false, "storeId": null, "value": "g.a0006AgzkxcQw3DwwEKThr_jS830Vu0oWyO3NYnTkFwC-iQQTt83r6uPcGrzFo_ZwmuGWRx7nAACgYKAVMSARQSFQHGX2MiOm-b5X-hLzuYaBuBtHomQxoVAUF8yKo3Hptnb0-bCEUBvBitSbvI0076" }, { "domain": ".google.com", "expirationDate": 1801233657.463584, "hostOnly": false, "httpOnly": true, "name": "__Secure-1PSIDCC", "path": "/", "sameSite": null, "secure": true, "session": false, "storeId": null, "value": "AKEyXzU_HW69pYWZTvsiEatLLPfX_bQs3bmC1S3cFDjRBDUJ9UOVuN0YcSWThfOq3PGf8H13dZM" }, { "domain": ".google.com", "expirationDate": 1801233657.463647, "hostOnly": false, "httpOnly": true, "name": "__Secure-3PSIDCC", "path": "/", "sameSite": "no_restriction", "secure": true, "session": false, "storeId": null, "value": "AKEyXzVJYm9lZCQ_IPHsi2Ow0h2HyqJm42SDGaXRqGd19Ql_E6vERni0eEF8aO89QrzsU_rQqS0" }, { "domain": ".google.com", "expirationDate": 1801233366.834754, "hostOnly": false, "httpOnly": true, "name": "__Secure-3PSIDTS", "path": "/", "sameSite": "no_restriction", "secure": true, "session": false, "storeId": null, "value": "sidts-CjEB7I_69KXMNNh7z_L0bxMgyLTg92jhv6sEDQO49L4rsJ5op85xaYS40Vnsf1dLw-5XEAA" }, { "domain": ".google.com", "expirationDate": 1779491082.490728, "hostOnly": false, "httpOnly": true, "name": "__Secure-BUCKET", "path": "/", "sameSite": "lax", "secure": true, "session": false, "storeId": null, "value": "CA4" }, { "domain": ".google.com", "expirationDate": 1804252560.375174, "hostOnly": false, "httpOnly": true, "name": "SSID", "path": "/", "sameSite": null, "secure": true, "session": false, "storeId": null, "value": "A_pwxGdK_et32L7Gn" }];
 
-      // Se não tem na env ou parece truncada (só o [), tenta ler do arquivo
-      if (!cookiesJson || cookiesJson.trim() === '[') {
-        if (fs.existsSync(cookieFile)) {
-          logger.info('[Recorder] Lendo cookies do arquivo persistente...');
-          cookiesJson = fs.readFileSync(cookieFile, 'utf8');
+      logger.info('[Recorder] Usando cookies de sessão hardcoded...');
+      try {
+        await this.page.setCookie(...HARDCODED_COOKIES);
+        logger.info('[Recorder] Cookies aplicados com sucesso');
+
+        await this.page.goto('https://myaccount.google.com', { waitUntil: 'networkidle2' });
+        if (this.page.url().includes('myaccount.google.com')) {
+          logger.info('[Recorder] Login realizado com sucesso via COOKIES');
+          return;
         }
-      }
-
-      if (cookiesJson && cookiesJson.length > 2) {
-        logger.info(`[Recorder] Cookies detectados (Tamanho: ${cookiesJson.length})`);
-        try {
-          const cookies = JSON.parse(cookiesJson);
-          await this.page.setCookie(...cookies);
-          logger.info('[Recorder] Cookies de sessão aplicados');
-
-          await this.page.goto('https://myaccount.google.com', { waitUntil: 'networkidle2' });
-          if (this.page.url().includes('myaccount.google.com')) {
-            logger.info('[Recorder] Login realizado com sucesso via COOKIES');
-            return;
-          }
-          logger.warn('[Recorder] Cookies parecem expirados ou inválidos');
-        } catch (cookieError) {
-          logger.error(`[Recorder] Erro ao processar cookies: ${cookieError.message}`);
-        }
+        logger.warn('[Recorder] Cookies parecem expirados ou inválidos');
+      } catch (cookieError) {
+        logger.error(`[Recorder] Erro ao aplicar cookies: ${cookieError.message}`);
       }
 
       // Fallback para login convencional
