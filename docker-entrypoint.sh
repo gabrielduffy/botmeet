@@ -33,13 +33,14 @@ export MCP_URL=http://localhost:8004
 export VEXA_API_URL=http://localhost:8000
 export DB_HOST=${DB_HOST:-sortebem_postgresbot}
 export REDIS_URL=${REDIS_URL:-redis://sortebem_redisbot:6379/0}
+export PYTHONPATH=$PYTHONPATH:/app/services/bot-manager:/app/services/admin-api
 
 # Hack para DNS interno (api-gateway -> localhost)
 echo "127.0.0.1 api-gateway" >> /etc/hosts
 
-# Rodamos as APIs em background
-nohup uvicorn services.admin-api.app.main:app --host 0.0.0.0 --port 8001 > /app/logs/admin-api.log 2>&1 &
-nohup uvicorn services.bot-manager.app.main:app --host 0.0.0.0 --port 8080 > /app/logs/bot-manager.log 2>&1 &
+# Rodamos as APIs em background (usando --app-dir para evitar ModuleNotFoundError)
+nohup uvicorn app.main:app --app-dir services/admin-api --host 0.0.0.0 --port 8001 > /app/logs/admin-api.log 2>&1 &
+nohup uvicorn app.main:app --app-dir services/bot-manager --host 0.0.0.0 --port 8080 > /app/logs/bot-manager.log 2>&1 &
 nohup uvicorn services.api-gateway.main:app --host 0.0.0.0 --port 8000 > /app/logs/api-gateway.log 2>&1 &
 
 echo "✅ [Vexa] APIs configuradas e em execução."
