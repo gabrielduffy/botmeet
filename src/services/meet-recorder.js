@@ -33,17 +33,13 @@ class MeetRecorder {
 
     try {
       await this.launchBrowser();
-
-      // Tentamos o login, mas se der desafio de 2FA, seguimos como convidado!
       await this.loginGoogle();
-
       await this.joinMeeting(meetUrl);
       await this.startRecording(outputPath);
       await this.monitorMeetingUntilEnd();
       await this.stopRecording();
       await this.convertToWav(outputPath, audioPath);
       await this.cleanup();
-
       return audioPath;
     } catch (error) {
       logger.error(`[Recorder] Erro: ${error.message}`);
@@ -54,7 +50,6 @@ class MeetRecorder {
 
   async launchBrowser() {
     logger.info('[Recorder] Iniciando browser em modo STEALTH...');
-
     this.browser = await puppeteer.launch({
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
       headless: false,
@@ -73,141 +68,114 @@ class MeetRecorder {
     });
 
     this.page = await this.browser.newPage();
-
-    // Configurar permissões globais
     const context = this.browser.defaultBrowserContext();
     await context.overridePermissions('https://meet.google.com', ['microphone', 'camera']);
   }
 
   async loginGoogle() {
-    logger.info('[Recorder] Verificando sessão do Google...');
+    logger.info('[Recorder] Aplicando cookies de sessão...');
     try {
-      await this.page.goto('https://accounts.google.com/signin', { waitUntil: 'networkidle2', timeout: 30000 });
+      const HARDCODED_COOKIES = [
+        { "domain": ".google.com", "name": "SAPISID", "value": "N_AhWA2wQ_Y7Fhgz/AJoSDbIeheiXJJ1F3", "path": "/", "secure": true },
+        { "domain": ".google.com", "name": "__Secure-3PAPISID", "value": "N_AhWA2wQ_Y7Fhgz/AJoSDbIeheiXJJ1F3", "path": "/", "secure": true },
+        { "domain": ".google.com", "name": "AEC", "value": "AaJma5ucTT0xwFmyg4Nxhc2dPNrTYYjYBoPiZtbGfrZiIxSMgfJAu-iniUQ", "path": "/", "secure": true },
+        { "domain": ".google.com", "name": "NID", "value": "528=jOcAayjs-H3LorgCEGgwjSy9HVbpDTP3TEXsoJn8f5BKrpVrhC08Tt2U6cJYOtPZ4AFGnXz75AyjizLpAgoDvkPm6oVcEDggwijOmlRvMxBq7XhoINL_zyBRr_El6au9pQmCWQSChYHmIJS7WCbMsE67f8PvoITh0wKp_QUrCSediJvnZmM9DRyk2NiDXN0dZU38BAJNNnzyHxhyUsxO5dEXNs8ArTgqkoYo4X-Co1omvNqCxJUxv-MQi6VYrR8P1DUMObmnXDco-0DMwoQtRQHxFj-kq4LCZ5-WsPGNRwNgd7TjF8b46jDkR2FL0D5KWJ1mxAb3G-WOqRsYwVwKR6mViKoLA3t7deq_b-5r5DocDm8mO-PZu4sr0dfXAMP3qdy2tBksfWxAiprM3eb5T73RHFXuvCEZFVGmV_iJJo8QaNISiHcYnxc_IB0Ra8rStcEE-UGuIuChA4dmTub2_ekfbpJetGzwrYdITnST1CCnujHWwZI13XGdPJPaukuPzcJkzKhA7w6elBFkCshed0yX5GOlBUpWN_3t5nW9itBR4adBO5AkEVDUwiHRNLD6wKerZqiQP0ytNUg_BctJ4ov3do3kF6G8Dp8UEiwQz36fLnTAdG6Xc1rJhdo5Li5fgBVesr56Wfc21xy_ZpSJ7DLXrasRKdGmtHnCXR5H7K5YWrlpGDNyFbNHjyaJCWA9JIhwZbbyRH6Ql0HKoXk0AydXkxXPc8b1tFSCf3QIIrULRfaMz_ZgS0r98m-TFdnNCYzHZ0nopn_Z5Pau5DwedO19gytCTIb0V-0XqqWkha3j1aLLj3Hqyd2rNkxk5Gg8FK38GWy-d06PxNfjNz0-fDvvfK1tJ6Rp4hCMwWZUfW6JEisMyaMZ5ForXmRupr4t8Duv6w0eLi3pu16H0bAofASsN0CIQ-Yhr6oF28ZJaW1EiseLRMnk-hSk_J7IexNRzL2pIxZFrEM7CQ1bMolwGJBQHyZHVC6iMhEwCURCXDjhLBeaX7ny_YUtXnKK0LZB9IeN9mTAQPSFdLflpVNO20DCMojl2MOpS5NxWcv361imN5wSX3e2rpZlIjgU4qB9IYc87sLRd4MeHxbOw7zkTI_7YJ4jOcv5ugsuKVAI2jECoAlHH2DVA6jaeDg4YwjUMubayQLZHrSBDZAcVKYLf8JpZKneZKDJDfnvCFFFSgHN715yCw3tmJeYwUr1CgIpHJpHbX8d4sXFXvmge1h8KqP1jl8QHyGN373Ipd6pBsQixs2ZJK8stIiZOzE1agKsfHgtC2MiS7RtdTNYVC4FSZSopzmNrbwnr4t86jtc3Fg2KoumVF_YQ7F5wo8p-LgLUvaLc0v3WqRd_dO8wVEwdmj44axYjMCcfwMgK8iKIxgb1AqX0Y2n-W4Yh0eWYTKddpRJdslTus4Xclexk9txCDIdTskqF3eNGF15twdwC7KxIvIcU5hYFJTZZ3ZleB0l62RAM1Kn3Z9NGrJSPnQryWh6uwMA-v1O8pBGEvVIW3wG_ABFRA-UcZVI180-xGkdj1PrR2rHenbtmiDv_ZXD-8H2NShuFNR85PAftKjZaV9tKk4Y8R8DazYPGQnzkYxbRCDhjdMMaMrVaXQQ3_objzgigfcig90A0Gxgk07nRXWlagkpZfzv4QAYClvocEi_hUr2bqjU7SXZTHjbhHvSYgdjYPOBsyflKBJ4pbYbhCv3ETUHIeBvDsFIkwS_jvWtPrndsQHykdyxAL0vu1Y7zBMVimBCXDgxXCN_3WQWu6W3MKJMpAmrVd_uApkuoxtDpckOWo3azzWVh442IuJ0a6Xe14VcfXN1dEqYzNjtUBOuV45bX_yA0N7Uj8vpWYzWi24HORKDmJ4IsI9UObH0sIDNTxUGyxRiSvOH7iygHNaVLdVydqkXLzOQXKKeS9QEW98oSanYmfT639oIJMfAuxqVlZ18g021ZGqxNFXLFokZqXDks02Cia4hLyEDjsUi7hPo-Ecf0OsqRu0ILWat5oMEz9W1rl96V22bfyERw" },
+        { "domain": ".google.com", "name": "__Secure-1PSIDTS", "value": "sidts-CjEB7I_69KXMNNh7z_L0bxMgyLTg92jhv6sEDQO49L4rsJ5op85xaYS40Vnsf1dLw-5XEAA", "path": "/", "secure": true },
+        { "domain": ".google.com", "name": "__Secure-3PSIDTS", "value": "sidts-CjEB7I_69KXMNNh7z_L0bxMgyLTg92jhv6sEDQO49L4rsJ5op85xaYS40Vnsf1dLw-5XEAA", "path": "/", "secure": true },
+        { "domain": ".google.com", "name": "__Secure-1PSID", "value": "g.a0006AgzkxcQw3DwwEKThr_jS830Vu0oWyO3NYnTkFwC-iQQTt83r6uPcGrzFo_ZwmuGWRx7nAACgYKAVMSARQSFQHGX2MiOm-b5X-hLzuYaBuBtHomQxoVAUF8yKo3Hptnb0-bCEUBvBitSbvI0076", "path": "/", "secure": true },
+        { "domain": ".google.com", "name": "__Secure-3PSID", "value": "g.a0006AgzkxcQw3DwwEKThr_jS830Vu0oWyO3NYnTkFwC-iQQTt83C9njC1T8LwZGizhvSM36cAACgYKAcgSARQSFQHGX2MiahYosPWLDff5RhrZKafmOhoVAUF8yKry1jXdJePNcT6z4-42kl3X0076", "path": "/", "secure": true }
+      ];
 
-      // Se vir a barra de busca ou perfil, já está logado
-      if (await this.page.$('[aria-label="Google Account"]') || this.page.url().includes('myaccount')) {
-        logger.info('[Recorder] ✅ Sessão já ativa!');
+      await this.page.setCookie(...HARDCODED_COOKIES);
+      logger.info('[Recorder] Cookies aplicados.');
+
+      await this.page.goto('https://myaccount.google.com', { waitUntil: 'networkidle2', timeout: 30000 });
+      if (this.page.url().includes('myaccount') || await this.page.$('[aria-label*="Google Account"]')) {
+        logger.info('[Recorder] ✅ Login via Cookies OK!');
         return;
       }
-
-      logger.info('[Recorder] Tentando login automático...');
-      const email = process.env.BOT_GOOGLE_EMAIL;
-      const pass = process.env.BOT_GOOGLE_PASSWORD;
-
-      if (!email || !pass) return;
-
-      await this.page.type('input[type="email"]', email, { delay: 100 });
-      await this.page.keyboard.press('Enter');
-      await this.sleep(3000);
-
-      // Se aparecer tela de desafio/2FA, DESISTE e vai pra reunião como convidado
-      if (this.page.url().includes('challenge') || await this.page.$('#identity-checkout')) {
-        logger.warn('[Recorder] ⚠️ Desafio de segurança detectado. Entraremos como CONVIDADO.');
-        return;
-      }
-
-      await this.page.type('input[type="password"]', pass, { delay: 100 });
-      await this.page.keyboard.press('Enter');
-      await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 }).catch(() => { });
     } catch (e) {
-      logger.warn('[Recorder] Falha no login, seguindo como convidado: ' + e.message);
+      logger.warn('[Recorder] Falha ao aplicar cookies: ' + e.message);
     }
   }
 
   async joinMeeting(meetUrl) {
     logger.info(`[Recorder] Acessando Meet: ${meetUrl}`);
     await this.page.goto(meetUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-
-    // Esperar a tela carregar
     await this.sleep(5000);
 
-    // Se pedir nome (modo convidado)
-    const nameInput = await this.page.$('input[aria-label="Qual é o seu nome?"], input[placeholder="Seu nome"]');
+    // Se o Meet bloquear de cara, tentar recarregar uma vez
+    if (this.page.url().includes('error') || await this.page.$('path[d*="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10"]')) {
+      logger.warn('[Recorder] Detectada tela de erro. Tentando recarregar...');
+      await this.page.reload({ waitUntil: 'networkidle2' });
+      await this.sleep(5000);
+    }
+
+    const nameInput = await this.page.$('input[aria-label*="nome"]');
     if (nameInput) {
-      logger.info('[Recorder] Entrando como CONVIDADO (Benemax Bot)...');
       await nameInput.type('Benemax Assistant', { delay: 100 });
       await this.page.keyboard.press('Enter');
-    }
-
-    // Clicar em "Pedir para participar" ou "Participar agora"
-    const joinSelectors = [
-      'span:contains("Pedir para participar")',
-      'span:contains("Participar agora")',
-      'div[role="button"] span',
-      'button:not([disabled])'
-    ];
-
-    logger.info('[Recorder] Tentando entrar na sala...');
-    for (let i = 0; i < 10; i++) {
-      const buttons = await this.page.$$('button');
-      for (const btn of buttons) {
-        const text = await this.page.evaluate(el => el.innerText, btn);
-        if (text.includes('participar') || text.includes('Join') || text.includes('Participar')) {
-          await btn.click();
-          logger.info(`[Recorder] Botão "${text}" clicado!`);
-          return;
-        }
-      }
       await this.sleep(2000);
     }
+
+    logger.info('[Recorder] Procurando botão de entrar...');
+    const result = await this.page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll('button'));
+      const joinBtn = buttons.find(b => {
+        const t = b.innerText.toLowerCase();
+        return t.includes('participar') || t.includes('join') || t.includes('pedir');
+      });
+      if (joinBtn) {
+        joinBtn.click();
+        return `Botão "${joinBtn.innerText}" clicado`;
+      }
+      return null;
+    });
+
+    if (result) {
+      logger.info(`[Recorder] ${result}`);
+    } else {
+      logger.warn('[Recorder] Botão de entrada não encontrado. Tentando ENTER forçado...');
+      await this.page.keyboard.press('Enter');
+    }
+    await this.sleep(5000);
   }
 
   async startRecording(outputPath) {
-    logger.info('[Recorder] Iniciando gravação FFmpeg...');
-    const display = process.env.DISPLAY || ':99';
-
+    logger.info('[Recorder] Iniciando gravação...');
     this.recordingProcess = spawn('ffmpeg', [
-      '-f', 'pulse',
-      '-i', 'default',
-      '-acodec', 'libopus',
-      outputPath,
-      '-y'
+      '-f', 'pulse', '-i', 'default',
+      '-acodec', 'libopus', outputPath, '-y'
     ]);
-
-    this.recordingProcess.stderr.on('data', (data) => {
-      // logger.debug(`[FFmpeg] ${data}`);
-    });
   }
 
   async monitorMeetingUntilEnd() {
-    logger.info('[Recorder] Monitorando reunião...');
-    let participantMissingCount = 0;
-
-    while (participantMissingCount < 5) {
-      const participants = await this.page.evaluate(() => {
-        const el = document.querySelector('.uGOf1d'); // Seletor de número de participantes
+    logger.info('[Recorder] Monitorando...');
+    let emptyCount = 0;
+    while (emptyCount < 6) {
+      const count = await this.page.evaluate(() => {
+        const el = document.querySelector('.uGOf1d');
         return el ? parseInt(el.innerText) : 0;
       });
-
-      if (participants <= 1) {
-        participantMissingCount++;
-        logger.info(`[Recorder] Reunião vazia? (${participantMissingCount}/10)`);
-      } else {
-        participantMissingCount = 0;
-      }
+      if (count <= 1) emptyCount++;
+      else emptyCount = 0;
       await this.sleep(10000);
     }
-    logger.info('[Recorder] Reunião encerrada ou bot ficou sozinho.');
   }
 
   async stopRecording() {
-    if (this.recordingProcess) {
-      this.recordingProcess.kill('SIGINT');
-      logger.info('[Recorder] Gravação interrompida.');
-    }
+    if (this.recordingProcess) this.recordingProcess.kill('SIGINT');
   }
 
   async convertToWav(inputPath, outputPath) {
-    return new Promise((resolve, reject) => {
+    return new Promise((res, rej) => {
       spawn('ffmpeg', ['-i', inputPath, '-ar', '16000', '-ac', '1', outputPath, '-y'])
-        .on('close', resolve)
-        .on('error', reject);
+        .on('close', res).on('error', rej);
     });
   }
 
   async cleanup() {
     if (this.browser) await this.browser.close();
-    logger.info('[Recorder] Recursos limpos.');
   }
 }
 
