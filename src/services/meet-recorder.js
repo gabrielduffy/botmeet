@@ -14,7 +14,7 @@ class MeetRecorder {
     this.recordingProcess = null;
     this.lastRecordingDuration = 0;
     this.recordingsDir = process.env.RECORDINGS_DIR || '/app/recordings';
-    
+
     // Garantir que diretório existe
     if (!fs.existsSync(this.recordingsDir)) {
       fs.mkdirSync(this.recordingsDir, { recursive: true });
@@ -30,34 +30,34 @@ class MeetRecorder {
   async joinAndRecord(meetUrl, eventId) {
     const outputPath = path.join(this.recordingsDir, `${eventId}-${Date.now()}.webm`);
     const audioPath = path.join(this.recordingsDir, `${eventId}-${Date.now()}.wav`);
-    
+
     try {
       // 1. Iniciar browser
       await this.launchBrowser();
-      
+
       // 2. Fazer login no Google
       await this.loginGoogle();
-      
+
       // 3. Entrar na reunião
       await this.joinMeeting(meetUrl);
-      
+
       // 4. Iniciar gravação de áudio
       await this.startRecording(outputPath);
-      
+
       // 5. Monitorar reunião até terminar
       await this.monitorMeetingUntilEnd();
-      
+
       // 6. Parar gravação
       await this.stopRecording();
-      
+
       // 7. Converter para WAV (melhor para Whisper)
       await this.convertToWav(outputPath, audioPath);
-      
+
       // 8. Limpar
       await this.cleanup();
-      
+
       return audioPath;
-      
+
     } catch (error) {
       logger.error(`[Recorder] Erro: ${error.message}`);
       await this.cleanup();
@@ -94,7 +94,7 @@ class MeetRecorder {
     });
 
     this.page = await this.browser.newPage();
-    
+
     // Configurar user agent realista
     await this.page.setUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -141,10 +141,10 @@ class MeetRecorder {
       await this.page.waitForSelector('input[type="email"]', { timeout: 10000 });
       await this.page.type('input[type="email"]', email, { delay: 50 });
       await this.page.click('#identifierNext');
-      
+
       // Aguardar campo de senha
       await this.sleep(3000);
-      
+
       // Inserir senha
       await this.page.waitForSelector('input[type="password"]', { visible: true, timeout: 15000 });
       await this.sleep(1000);
@@ -162,15 +162,15 @@ class MeetRecorder {
       }
 
       logger.info('[Recorder] Login realizado');
-      
+
     } catch (error) {
       logger.error(`[Recorder] Erro no login: ${error.message}`);
-      
+
       // Salvar screenshot para debug
       const screenshotPath = path.join(this.recordingsDir, `login-error-${Date.now()}.png`);
       await this.page.screenshot({ path: screenshotPath, fullPage: true });
       logger.info(`[Recorder] Screenshot salvo: ${screenshotPath}`);
-      
+
       throw error;
     }
   }
@@ -215,43 +215,54 @@ class MeetRecorder {
 
       await this.sleep(2000);
 
-      // Procurar botão de entrar
-      const joinButtonSelectors = [
-        'button[jsname="Qx7uuf"]', // "Participar agora"
-        '[data-idom-class*="join"]',
-        'button:has-text("Participar")',
-        'button:has-text("Join")',
-        'button:has-text("Pedir para participar")',
-        'button:has-text("Ask to join")',
-        '[jsname="CQylAd"]', // Alternativo
-      ];
-
+      // Loop agressivo de tentativa de entrada (30 segundos)
       let joined = false;
-      for (const selector of joinButtonSelectors) {
-        try {
-          const button = await this.page.$(selector);
-          if (button) {
-            await button.click();
-            joined = true;
-            logger.info(`[Recorder] Clicou em: ${selector}`);
-            break;
-          }
-        } catch (e) {
-          continue;
-        }
-      }
+      const startTime = Date.now();
 
-      if (!joined) {
-        // Tentar por texto
-        await this.page.evaluate(() => {
-          const buttons = Array.from(document.querySelectorAll('button'));
-          const joinBtn = buttons.find(b => 
-            b.textContent?.includes('Participar') || 
-            b.textContent?.includes('Join') ||
-            b.textContent?.includes('Pedir')
-          );
-          if (joinBtn) joinBtn.click();
-        });
+      while (!joined && (Date.now() - startTime < 30000)) {
+        for (const selector of joinButtonSelectors) {
+          try {
+            const button = await this.page.$(selector);
+            if (button) {
+              const isVisible = await button.evaluate(b => {
+                const style = window.getComputedStyle(b);
+                return style && style.display !== 'none' && style.visibility !== 'hidden' && b.offsetHeight > 0;
+              });
+
+              if (isVisible) {
+                await button.click();
+                logger.info(`[Recorder] Clicou no botão via seletor: ${selector}`);
+                joined = true;
+                break;
+              }
+            }
+          } catch (e) { }
+        }
+
+        if (!joined) {
+          // Tentar via Texto/Texto em botões genéricos
+          joined = await this.page.evaluate(() => {
+            const buttons = Array.from(document.querySelectorAll('button, [role="button"]'));
+            const joinBtn = buttons.find(b => {
+              const text = (b.innerText || b.textContent || "").toLowerCase();
+              return text.includes('participar') ||
+                text.includes('join') ||
+                text.includes('pedir para') ||
+                text.includes('ask to join') ||
+                text.includes('entrar');
+            });
+            if (joinBtn) {
+              joinBtn.click();
+              return true;
+            }
+            return false;
+          });
+          if (joined) logger.info('[Recorder] Clicou no botão via busca de texto');
+        }
+
+        if (!joined) {
+          await this.sleep(2000); // Espera 2s antes de tentar de novo
+        }
       }
 
       // Aguardar entrada na reunião
@@ -260,8 +271,8 @@ class MeetRecorder {
       // Verificar se entrou (procurar elementos da reunião ativa)
       const inMeeting = await this.page.evaluate(() => {
         return document.querySelector('[data-participant-id]') !== null ||
-               document.querySelector('[data-self-name]') !== null ||
-               document.querySelector('[jscontroller="xzbRj"]') !== null;
+          document.querySelector('[data-self-name]') !== null ||
+          document.querySelector('[jscontroller="xzbRj"]') !== null;
       });
 
       if (!inMeeting) {
@@ -269,14 +280,14 @@ class MeetRecorder {
       }
 
       logger.info('[Recorder] Entrou na reunião');
-      
+
     } catch (error) {
       logger.error(`[Recorder] Erro ao entrar na reunião: ${error.message}`);
-      
+
       // Screenshot para debug
       const screenshotPath = path.join(this.recordingsDir, `join-error-${Date.now()}.png`);
       await this.page.screenshot({ path: screenshotPath, fullPage: true });
-      
+
       throw error;
     }
   }
@@ -344,7 +355,7 @@ class MeetRecorder {
             'Retornar à tela inicial',
             'Return to home screen',
           ];
-          
+
           const bodyText = document.body.innerText || '';
           return endedIndicators.some(ind => bodyText.includes(ind));
         });
@@ -361,7 +372,7 @@ class MeetRecorder {
           if (countEl) {
             return parseInt(countEl.getAttribute('data-participant-count') || '0');
           }
-          
+
           // Contar avatares de participantes
           const participants = document.querySelectorAll('[data-participant-id]');
           return participants.length;
@@ -382,7 +393,7 @@ class MeetRecorder {
 
       } catch (error) {
         logger.warn(`[Recorder] Erro ao verificar reunião: ${error.message}`);
-        
+
         // Se página foi fechada, encerrar
         if (error.message.includes('Target closed') || error.message.includes('Session closed')) {
           break;
@@ -443,12 +454,12 @@ class MeetRecorder {
       ffmpeg.on('close', (code) => {
         if (code === 0) {
           logger.info('[Recorder] Conversão concluída');
-          
+
           // Remover arquivo original para economizar espaço
           try {
             fs.unlinkSync(inputPath);
-          } catch (e) {}
-          
+          } catch (e) { }
+
           resolve(outputPath);
         } else {
           reject(new Error(`FFmpeg retornou código ${code}`));
@@ -479,13 +490,13 @@ class MeetRecorder {
     if (this.page) {
       try {
         await this.page.close();
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (this.browser) {
       try {
         await this.browser.close();
-      } catch (e) {}
+      } catch (e) { }
     }
 
     this.page = null;
