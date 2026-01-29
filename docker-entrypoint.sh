@@ -1,19 +1,30 @@
 #!/bin/bash
-# docker-entrypoint.sh - Inicia o Display Virtual e os serviços Vexa
+# docker-entrypoint.sh - O "Ignicionador" do Ecossistema Benemax
 
-echo "🚀 Iniciando ambiente unificado Benemax..."
+echo "🚀 [System] Iniciando Ecossistema Unificado..."
 
-# 1. Iniciar Display Virtual (Indispensável para o robô abrir o Chrome sem monitor)
+# 1. Iniciar Display Virtual (Para o Chrome não crashar)
 Xvfb :99 -screen 0 1280x1024x24 &
 export DISPLAY=:99
+sleep 2
 
-# 2. Iniciar os serviços do Vexa em background (Lógica de microserviços em um container)
-# Nota: Aqui o orquestrador Node vai se comunicar com o Vexa interno
-echo "📡 Iniciando Gateways e Gerentes..."
+# 2. Iniciar PulseAudio (Para captura de som do Meet)
+pulseaudio -D --exit-idle-time=-1
+sleep 1
 
-# (Simulamos a inicialização dos binários/scripts do Vexa se necessário)
-# Por enquanto, o Orquestrador Node domina o fluxo e chama o robô via Python Bridge
+# 3. Iniciar Microserviços Vexa (Via Python)
+echo "📡 [Vexa] Ligando Motores (Gateway & Managers)..."
 
-# 3. Rodar o Orquestrador Principal
-echo "🤖 Bot Online! Monitorando reuniões..."
+# Instalamos o Vexa localmente se não estiver
+pip install -e ./libs/shared-models > /dev/null 2>&1
+
+# Rodamos as APIs em background
+nohup uvicorn services.admin-api.app.main:app --host 0.0.0.0 --port 8001 > /app/logs/admin-api.log 2>&1 &
+nohup uvicorn services.bot-manager.app.main:app --host 0.0.0.0 --port 8080 > /app/logs/bot-manager.log 2>&1 &
+nohup uvicorn services.api-gateway.main:app --host 0.0.0.0 --port 8000 > /app/logs/api-gateway.log 2>&1 &
+
+echo "✅ [Vexa] APIs em segundo plano."
+
+# 4. Iniciar o Orquestrador Node.js (Seu Bot)
+echo "🤖 [App] Bot Orquestrador iniciando..."
 exec node src/index.js
