@@ -148,7 +148,7 @@ class MeetRecorder {
           return;
         }
       }
-      await this.page.waitForTimeout(2000);
+      await this.sleep(2000);
     }
   }
 
