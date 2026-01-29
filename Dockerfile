@@ -1,9 +1,7 @@
-# Meeting Bot - Dockerfile
-# Bot automático para gravar e transcrever reuniões do Google Meet
-
+# Meeting Bot - Dockerfile (Evasão Pro)
 FROM node:20-slim
 
-# Instalar dependências do sistema
+# Instalar dependências do sistema - Versão Noble/Debian compatível
 RUN apt-get update && apt-get install -y \
     chromium \
     chromium-sandbox \
@@ -18,11 +16,11 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     ca-certificates \
     fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
+    libasound2t64 \
+    libatk-bridge2.0-0t64 \
+    libatk1.0-0t64 \
     libatspi2.0-0 \
-    libcups2 \
+    libcups2t64 \
     libdbus-1-3 \
     libdrm2 \
     libgbm1 \
@@ -38,40 +36,30 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Criar ambiente virtual Python para Whisper
+# Criar ambiente virtual Python
 RUN python3 -m venv /opt/whisper-env
 
-# Instalar Whisper com economia de memória e sem cache
-# PyTorch CPU-only (~200MB)
+# Instalar Whisper e Ferramentas de Evasão (UC + Selenium)
 RUN /opt/whisper-env/bin/pip install --upgrade pip && \
-    /opt/whisper-env/bin/pip install --no-cache-dir --timeout 600 --retries 10 torch --index-url https://download.pytorch.org/whl/cpu && \
-    /opt/whisper-env/bin/pip install --no-cache-dir --timeout 300 --retries 5 openai-whisper
+    /opt/whisper-env/bin/pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
+    /opt/whisper-env/bin/pip install --no-cache-dir openai-whisper undetected-chromedriver selenium
 
-# Criar diretório da aplicação
 WORKDIR /app
-
-# Copiar package.json primeiro (cache de dependências)
 COPY package*.json ./
-
-# Instalar dependências Node.js
 RUN npm install --omit=dev
-
-# Copiar código da aplicação
 COPY . .
 
-# Criar diretórios necessários
 RUN mkdir -p /app/recordings /app/transcriptions /app/logs
 
-# Variáveis de ambiente do Puppeteer
+# Variáveis críticas
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
     DISPLAY=:99 \
-    WHISPER_PATH=/opt/whisper-env/bin/whisper
+    WHISPER_PATH=/opt/whisper-env/bin/whisper \
+    PYTHON_BOT_PATH=/opt/whisper-env/bin/python3
 
-# Expor porta da API
 EXPOSE 3000
 
-# Script de inicialização
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
