@@ -1,165 +1,70 @@
 // src/services/meet-recorder.js
-// CONTROLADOR NODE QUE DISPARA O MOTOR PYTHON (EVASÃO)
-const path = require('path');
-const fs = require('fs');
-const { spawn } = require('child_process');
+// CONTROLADOR QUE COMANDA O VEXA (INFRAESTRUTURA PROFISSIONAL)
+const axios = require('axios');
 const { logger } = require('../utils/logger');
 
 class MeetRecorder {
   constructor() {
-    this.pythonProcess = null;
-    this.recordingProcess = null;
-    this.recordingsDir = process.env.RECORDINGS_DIR || '/app/recordings';
-    this.whisperPath = process.env.WHISPER_PATH || '/opt/whisper-env/bin/whisper';
-    this.pythonEnvPath = process.env.PYTHON_BOT_PATH || '/opt/whisper-env/bin/python3';
-
-    if (!fs.existsSync(this.recordingsDir)) fs.mkdirSync(this.recordingsDir, { recursive: true });
+    // URL interna do Docker para o api-gateway do Vexa
+    this.vexaApiUrl = process.env.VEXA_API_URL || 'http://api-gateway:8000';
+    this.adminToken = process.env.ADMIN_API_TOKEN || 'benemax_bot_secure_token_2026';
+    this.activeVexaBots = new Map(); // Armazena botId -> meetingId
   }
 
   async sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  /**
+   * Pede ao Vexa para enviar um robô para a reunião
+   */
   async joinAndRecord(meetUrl, eventId) {
-    const timestamp = Date.now();
-    const outputPath = path.join(this.recordingsDir, `${eventId}-${timestamp}.webm`);
-    const audioPath = path.join(this.recordingsDir, `${eventId}-${timestamp}.wav`);
-
     try {
-      logger.info(`[Recorder] 🚀 Iniciando motor Python: ${meetUrl}`);
+      logger.info(`[Vexa-Orchestrator] Solicitando bot para: ${meetUrl}`);
 
-      const scriptPath = path.join(__dirname, 'recorder.py');
-
-      // Disparar o script Python
-      this.pythonProcess = spawn(this.pythonEnvPath, [
-        scriptPath,
-        meetUrl,
-        eventId
-      ], {
-        env: {
-          ...process.env,
-          DISPLAY: ':99',
-          PYTHONUNBUFFERED: '1' // Garante logs em tempo real
+      // O Vexa tem um endpoint específico para Google Meet
+      const response = await axios.post(`${this.vexaApiUrl}/v1/google-meet/bot`, {
+        meeting_url: meetUrl,
+        bot_config: {
+          bot_name: "Assistente Benemax",
+          automatic_leave: {
+            waiting_room_timeout: 300000,
+            no_one_joined_timeout: 300000,
+            everyone_left_timeout: 300000
+          }
         }
+      }, {
+        headers: {
+          'Authorization': `Bearer ${this.adminToken}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000 // 30 segundos de timeout para a API responder
       });
 
-      // Handlers de Log
-      this.pythonProcess.stdout.on('data', (data) => {
-        const lines = data.toString().split('\n');
-        lines.forEach(line => {
-          if (line.trim()) logger.info(`[Python] ${line.trim()}`);
-        });
-      });
+      const botData = response.data;
+      logger.info(`[Vexa-Orchestrator] ✅ Bot disparado com sucesso! ID: ${botData.bot_id}`);
 
-      this.pythonProcess.stderr.on('data', (data) => {
-        const lines = data.toString().split('\n');
-        lines.forEach(line => {
-          if (line.trim()) logger.error(`[Python-Error] ${line.trim()}`);
-        });
-      });
+      // Armazenamos para controle futuro se necessário
+      this.activeVexaBots.set(eventId, botData.bot_id);
 
-      this.pythonProcess.on('error', (err) => {
-        logger.error(`[Recorder] ❌ Falha ao iniciar spawn do Python: ${err.message}`);
-      });
-
-      this.pythonProcess.on('close', (code) => {
-        logger.info(`[Recorder] Processo Python finalizado (code ${code})`);
-      });
-
-      // Aguardar o bot entrar e estabilizar
-      logger.info('[Recorder] Aguardando estabilização do navegador...');
-      await this.sleep(20000);
-
-      // Iniciar a gravação de áudio via FFmpeg
-      logger.info('[Recorder] Iniciando captura de áudio FFmpeg...');
-      this.startAudioRecording(outputPath);
-
-      // Aguardar o fim da reunião ou timeout
-      await this.monitorMeeting();
-
-      // Limpeza
-      await this.stopAudioRecording();
-      await this.cleanupPython();
-
-      // Converter para WAV para o Whisper
-      await this.convertToWav(outputPath, audioPath);
-
-      return audioPath;
+      return botData;
     } catch (error) {
-      logger.error(`[Recorder] ❌ Crash no fluxo: ${error.message}`);
-      await this.cleanup();
-      throw error;
-    }
-  }
+      const errorMsg = error.response?.data?.detail || error.message;
+      logger.error(`[Vexa-Orchestrator] ❌ Falha ao chamar Vexa: ${errorMsg}`);
 
-  startAudioRecording(outputPath) {
-    // Usamos pulse para capturar o áudio que o Chrome está "tocando" no sink virtual
-    this.recordingProcess = spawn('ffmpeg', [
-      '-f', 'pulse',
-      '-i', 'default', // Pulseaudio configurado no entrypoint
-      '-acodec', 'libopus',
-      '-y', outputPath
-    ]);
-
-    this.recordingProcess.stderr.on('data', (data) => {
-      // ffmpeg envia progresso para stderr
-    });
-  }
-
-  async monitorMeeting() {
-    // Basicamente esperamos o processo Python fechar ou um tempo máximo
-    return new Promise((resolve) => {
-      const checkInterval = setInterval(() => {
-        if (!this.pythonProcess || this.pythonProcess.killed) {
-          clearInterval(checkInterval);
-          resolve();
-        }
-      }, 5000);
-
-      // Timeout de segurança de 2 horas
-      setTimeout(() => {
-        clearInterval(checkInterval);
-        resolve();
-      }, 2 * 60 * 60 * 1000);
-    });
-  }
-
-  async stopAudioRecording() {
-    if (this.recordingProcess) {
-      this.recordingProcess.kill('SIGINT');
-      await this.sleep(2000);
-    }
-  }
-
-  async cleanupPython() {
-    if (this.pythonProcess) {
-      this.pythonProcess.kill('SIGKILL');
-      this.pythonProcess = null;
+      // Se falhar no Vexa, não adianta tentar o antigo, pois o ambiente mudou
+      throw new Error(`Vexa Error: ${errorMsg}`);
     }
   }
 
   async cleanup() {
-    await this.stopAudioRecording();
-    await this.cleanupPython();
+    // O Vexa gerencia o próprio ciclo de vida dos containers robôs
+    logger.info('[Vexa-Orchestrator] Cleanup executado.');
   }
 
-  getLastRecordingDuration() {
-    return "Calculado via metadados FFmpeg";
-  }
-
-  async convertToWav(inputPath, outputPath) {
-    return new Promise((resolve, reject) => {
-      if (!fs.existsSync(inputPath)) {
-        return reject(new Error(`Input file not found: ${inputPath}`));
-      }
-
-      const ffmpeg = spawn('ffmpeg', ['-i', inputPath, '-ar', '16000', '-ac', '1', '-y', outputPath]);
-      ffmpeg.on('close', (code) => {
-        if (code === 0) resolve(outputPath);
-        else reject(new Error(`FFmpeg convert failed code ${code}`));
-      });
-    });
-  }
+  // Métodos mantidos apenas para compatibilidade de interface se necessário
+  async stopAudioRecording() { }
+  async cleanupPython() { }
 }
 
 module.exports = { MeetRecorder };
