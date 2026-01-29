@@ -34,7 +34,21 @@ RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key
 # Configurar o ambiente do robô Vexa (Python)
 RUN python3 -m venv /opt/vexa-env && \
     /opt/vexa-env/bin/pip install --upgrade pip && \
-    /opt/vexa-env/bin/pip install --no-cache-dir undetected-chromedriver selenium requests
+    /opt/vexa-env/bin/pip install --no-cache-dir \
+    undetected-chromedriver \
+    selenium \
+    requests \
+    fastapi \
+    uvicorn[standard] \
+    httpx \
+    pydantic \
+    python-dotenv \
+    redis \
+    sqlalchemy \
+    asyncpg \
+    databases[asyncpg] \
+    alembic \
+    psycopg2-binary
 
 WORKDIR /app
 
@@ -46,15 +60,19 @@ RUN npm install --omit=dev
 COPY . .
 
 # Permissões e pastas
-RUN mkdir -p /app/recordings /app/logs /tmp && \
-    chmod -R 777 /app/recordings /app/logs /tmp
+RUN mkdir -p /app/recordings /app/logs /tmp /app/storage/screenshots /app/storage/logs && \
+    chmod -R 777 /app/recordings /app/logs /tmp /app/storage
 
 # Variáveis de ambiente para o robô
 ENV DISPLAY=:99 \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/vexa-env/bin:$PATH"
 
 EXPOSE 3000
 
-# Script de entrada que inicia o Xvfb (Virtual Display) e o seu App
-ENTRYPOINT ["sh", "-c", "Xvfb :99 -screen 0 1280x1024x24 & node src/index.js"]
+# Garantir que o script de entrada tenha permissão de execução
+RUN chmod +x /app/docker-entrypoint.sh
+
+# Script de entrada unificado
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

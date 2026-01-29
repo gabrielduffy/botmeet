@@ -1,104 +1,100 @@
 // src/test-bot.js
-// Teste básico das funcionalidades do bot
-
+// Teste de validação para o novo Orquestrador Vexa
 require('dotenv').config();
 const { CalendarMonitor } = require('./services/calendar-monitor');
-const { Transcriber } = require('./services/transcriber');
-const { WebhookSender } = require('./services/webhook-sender');
+const { MeetRecorder } = require('./services/meet-recorder');
 const { logger } = require('./utils/logger');
+const axios = require('axios');
 
 async function runTests() {
   console.log('\n╔════════════════════════════════════════════════════════════╗');
-  console.log('║           🧪 Meeting Bot - Testes de Sistema               ║');
+  console.log('║           🧪 Benemax Bot - Validação de Sistema           ║');
   console.log('╚════════════════════════════════════════════════════════════╝\n');
 
   const results = {
-    calendar: false,
-    whisper: false,
-    webhook: false,
+    google_calendar: false,
+    vexa_config: false,
+    environment: false
   };
 
-  // Teste 1: Google Calendar
+  // 1. Testar Variáveis de Ambiente
   console.log('━'.repeat(60));
-  console.log('📅 Teste 1: Google Calendar API\n');
-  
+  console.log('📦 Teste 1: Variáveis de Ambiente\n');
+  const required = [
+    'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN',
+    'DB_HOST', 'REDIS_HOST', 'ADMIN_API_TOKEN'
+  ];
+
+  let envOk = true;
+  required.forEach(v => {
+    if (process.env[v]) {
+      console.log(`✅ ${v} está configurada`);
+    } else {
+      console.log(`❌ ${v} está FALTANDO`);
+      envOk = false;
+    }
+  });
+  results.environment = envOk;
+
+  // 2. Testar Google Calendar
+  console.log('\n' + '━'.repeat(60));
+  console.log('📅 Teste 2: Google Calendar API\n');
+
   try {
     const calendar = new CalendarMonitor();
     await calendar.initialize();
-    
-    const meetings = await calendar.getUpcomingMeetings(60);
-    console.log(`✅ Conexão OK! Encontradas ${meetings.length} reuniões na próxima hora`);
-    
-    if (meetings.length > 0) {
-      console.log('\nPróximas reuniões:');
-      meetings.forEach((m, i) => {
-        console.log(`  ${i + 1}. ${m.summary}`);
-        console.log(`     Início: ${m.start}`);
-        console.log(`     Meet: ${m.meetUrl || 'N/A'}`);
-      });
-    }
-    
-    results.calendar = true;
+
+    const meetings = await calendar.getUpcomingMeetings(1440); // Próximas 24h
+    console.log(`✅ Sucesso! Conectado ao Google Calendar.`);
+    console.log(`   Eventos encontrados nas próximas 24h: ${meetings.length}`);
+
+    results.google_calendar = true;
   } catch (error) {
-    console.log(`❌ Falhou: ${error.message}`);
+    console.log(`❌ Falha no Calendar: ${error.message}`);
   }
 
-  // Teste 2: Whisper
+  // 3. Testar Configuração Vexa (Sem disparar robô real)
   console.log('\n' + '━'.repeat(60));
-  console.log('🎤 Teste 2: Whisper (Transcrição)\n');
-  
+  console.log('📡 Teste 3: Configuração do Orquestrador Vexa\n');
+
   try {
-    const transcriber = new Transcriber();
-    const available = await transcriber.checkWhisper();
-    
-    if (available) {
-      console.log('✅ Whisper disponível');
-      console.log(`   Modelo: ${process.env.WHISPER_MODEL || 'small'}`);
-      console.log(`   Idioma: ${process.env.WHISPER_LANGUAGE || 'pt'}`);
-      results.whisper = true;
+    const recorder = new MeetRecorder();
+    console.log(`   URL Alvo: ${recorder.vexaApiUrl}`);
+    console.log(`   Token: ${recorder.adminToken.substring(0, 5)}...`);
+
+    // Testamos se a URL é válida
+    if (recorder.vexaApiUrl.includes('api-gateway') || recorder.vexaApiUrl.includes('localhost')) {
+      console.log('✅ Endpoint do Vexa configurado corretamente.');
+      results.vexa_config = true;
     } else {
-      console.log('❌ Whisper não encontrado');
-      console.log('   Verifique se está instalado em: ' + (process.env.WHISPER_PATH || '/opt/whisper-env/bin/whisper'));
+      console.log('❌ Endpoint do Vexa parece incorreto.');
     }
   } catch (error) {
-    console.log(`❌ Falhou: ${error.message}`);
-  }
-
-  // Teste 3: Webhook
-  console.log('\n' + '━'.repeat(60));
-  console.log('📤 Teste 3: Webhook (Lovable)\n');
-  
-  const webhookUrl = process.env.LOVABLE_WEBHOOK_URL;
-  
-  if (!webhookUrl) {
-    console.log('⚠️ LOVABLE_WEBHOOK_URL não configurada');
-  } else {
-    console.log(`URL: ${webhookUrl}`);
-    console.log('(Não enviando dados de teste para não poluir o sistema)');
-    console.log('✅ Configuração OK');
-    results.webhook = true;
+    console.log(`❌ Erro na config: ${error.message}`);
   }
 
   // Resumo
   console.log('\n' + '━'.repeat(60));
-  console.log('📋 RESUMO DOS TESTES\n');
-  
-  const total = Object.values(results).filter(Boolean).length;
-  const passed = Object.entries(results)
-    .map(([name, ok]) => `  ${ok ? '✅' : '❌'} ${name}`)
-    .join('\n');
-  
-  console.log(passed);
-  console.log(`\nTotal: ${total}/3 testes passaram`);
+  console.log('📋 RESUMO DA VALIDAÇÃO\n');
 
-  if (total === 3) {
-    console.log('\n🎉 Todos os testes passaram! Bot pronto para uso.');
+  const total = Object.values(results).filter(Boolean).length;
+  Object.entries(results).forEach(([name, ok]) => {
+    console.log(`  ${ok ? '✅' : '❌'} ${name}`);
+  });
+
+  console.log(`\nStatus: ${total}/3 testes de configuração passaram.`);
+
+  if (results.google_calendar && results.environment) {
+    console.log('\n🚀 TUDO PRONTO! Pode subir para o Easypanel com confiança.');
+    console.log('   O Vexa só responderá "OK" após o deploy completo lá.\n');
   } else {
-    console.log('\n⚠️ Alguns testes falharam. Verifique as configurações.');
+    console.log('\n⚠️ Corrija os erros acima antes de tentar o deploy.\n');
   }
 
-  console.log('\n');
-  process.exit(total === 3 ? 0 : 1);
+  process.exit(results.google_calendar && results.environment ? 0 : 1);
 }
 
-runTests().catch(console.error);
+runTests().catch(e => {
+  console.error('❌ Erro Fatal no teste:', e);
+  process.exit(1);
+});

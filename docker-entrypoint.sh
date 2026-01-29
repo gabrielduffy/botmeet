@@ -3,6 +3,12 @@
 
 echo "🚀 [System] Iniciando Ecossistema Unificado..."
 
+# Ativar o ambiente virtual Python se ele existir
+if [ -f "/opt/vexa-env/bin/activate" ]; then
+    source /opt/vexa-env/bin/activate
+    export PATH="/opt/vexa-env/bin:$PATH"
+fi
+
 # 1. Iniciar Display Virtual (Para o Chrome não crashar)
 Xvfb :99 -screen 0 1280x1024x24 &
 export DISPLAY=:99
@@ -16,7 +22,7 @@ sleep 1
 echo "📡 [Vexa] Ligando Motores (Gateway & Managers)..."
 
 # Instalamos o Vexa localmente se não estiver
-pip install -e ./libs/shared-models > /dev/null 2>&1
+pip install -e ./libs/shared-models
 
 # Rodamos as APIs em background
 nohup uvicorn services.admin-api.app.main:app --host 0.0.0.0 --port 8001 > /app/logs/admin-api.log 2>&1 &
