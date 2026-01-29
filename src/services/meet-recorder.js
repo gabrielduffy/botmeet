@@ -128,6 +128,7 @@ class MeetRecorder {
       // Tentar usar cookies primeiro (Mais robusto)
       const cookiesJson = process.env.BOT_GOOGLE_COOKIES;
       if (cookiesJson) {
+        logger.info(`[Recorder] Variável de cookies detectada (Tamanho: ${cookiesJson.length})`);
         try {
           const cookies = JSON.parse(cookiesJson);
           await this.page.setCookie(...cookies);
