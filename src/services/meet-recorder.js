@@ -215,6 +215,17 @@ class MeetRecorder {
 
       await this.sleep(2000);
 
+      // Seletores de botões conhecidos (Português e Inglês)
+      const joinButtonSelectors = [
+        'button[jsname="Qx7uuf"]', // "Participar agora"
+        '[data-idom-class*="join"]',
+        'button:has-text("Participar")',
+        'button:has-text("Join")',
+        'button:has-text("Pedir para participar")',
+        'button:has-text("Ask to join")',
+        '[jsname="CQylAd"]', // Alternativo
+      ];
+
       // Loop agressivo de tentativa de entrada (30 segundos)
       let joined = false;
       const startTime = Date.now();
