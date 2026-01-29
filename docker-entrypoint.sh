@@ -21,15 +21,28 @@ sleep 1
 # 3. Iniciar Microserviços Vexa (Via Python)
 echo "📡 [Vexa] Ligando Motores (Gateway & Managers)..."
 
-# Instalamos o Vexa localmente se não estiver
+# Instalar dependências críticas se não estiverem no venv
 pip install -e ./libs/shared-models
+pip install "pydantic[email]" email-validator
+
+# Variáveis para comunicação interna (Unificada)
+export ADMIN_API_URL=http://localhost:8001
+export BOT_MANAGER_URL=http://localhost:8080
+export TRANSCRIPTION_COLLECTOR_URL=http://localhost:8002
+export MCP_URL=http://localhost:8004
+export VEXA_API_URL=http://localhost:8000
+export DB_HOST=${DB_HOST:-sortebem_postgresbot}
+export REDIS_URL=${REDIS_URL:-redis://sortebem_redisbot:6379/0}
+
+# Hack para DNS interno (api-gateway -> localhost)
+echo "127.0.0.1 api-gateway" >> /etc/hosts
 
 # Rodamos as APIs em background
 nohup uvicorn services.admin-api.app.main:app --host 0.0.0.0 --port 8001 > /app/logs/admin-api.log 2>&1 &
 nohup uvicorn services.bot-manager.app.main:app --host 0.0.0.0 --port 8080 > /app/logs/bot-manager.log 2>&1 &
 nohup uvicorn services.api-gateway.main:app --host 0.0.0.0 --port 8000 > /app/logs/api-gateway.log 2>&1 &
 
-echo "✅ [Vexa] APIs em segundo plano."
+echo "✅ [Vexa] APIs configuradas e em execução."
 
 # 4. Iniciar o Orquestrador Node.js (Seu Bot)
 echo "🤖 [App] Bot Orquestrador iniciando..."

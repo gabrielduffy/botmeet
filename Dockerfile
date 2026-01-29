@@ -41,7 +41,8 @@ RUN python3 -m venv /opt/vexa-env && \
     fastapi \
     uvicorn[standard] \
     httpx \
-    pydantic \
+    pydantic[email] \
+    email-validator \
     python-dotenv \
     redis \
     sqlalchemy \

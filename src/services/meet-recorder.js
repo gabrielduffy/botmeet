@@ -22,8 +22,9 @@ class MeetRecorder {
     try {
       logger.info(`[Vexa-Orchestrator] Solicitando bot para: ${meetUrl}`);
 
-      // O Vexa tem um endpoint específico para Google Meet
-      const response = await axios.post(`${this.vexaApiUrl}/v1/google-meet/bot`, {
+      // A rota descoberta no Gateway é /bots
+      const response = await axios.post(`${this.vexaApiUrl}/bots`, {
+        platform: "google-meet",
         meeting_url: meetUrl,
         bot_config: {
           bot_name: "Assistente Benemax",
