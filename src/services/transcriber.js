@@ -9,10 +9,10 @@ const { logger } = require('../utils/logger');
 class Transcriber {
   constructor() {
     this.whisperPath = process.env.WHISPER_PATH || '/opt/whisper-env/bin/whisper';
-    this.model = process.env.WHISPER_MODEL || 'small'; // tiny, base, small, medium, large
+    this.model = process.env.WHISPER_MODEL || 'base'; // tiny, base, small, medium, large
     this.language = process.env.WHISPER_LANGUAGE || 'pt'; // português
     this.transcriptionsDir = process.env.TRANSCRIPTIONS_DIR || '/app/transcriptions';
-    
+
     // Garantir que diretório existe
     if (!fs.existsSync(this.transcriptionsDir)) {
       fs.mkdirSync(this.transcriptionsDir, { recursive: true });
@@ -25,11 +25,11 @@ class Transcriber {
   async checkWhisper() {
     return new Promise((resolve) => {
       const check = spawn(this.whisperPath, ['--help']);
-      
+
       check.on('close', (code) => {
         resolve(code === 0);
       });
-      
+
       check.on('error', () => {
         resolve(false);
       });
@@ -86,7 +86,7 @@ class Transcriber {
       whisper.stderr.on('data', (data) => {
         const message = data.toString();
         stderr += message;
-        
+
         // Whisper envia progresso no stderr
         if (message.includes('%')) {
           const match = message.match(/(\d+)%/);
@@ -98,7 +98,7 @@ class Transcriber {
 
       whisper.on('close', (code) => {
         const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-        
+
         if (code !== 0) {
           logger.error(`[Transcriber] Whisper falhou com código ${code}`);
           logger.error(`[Transcriber] Stderr: ${stderr}`);
@@ -108,29 +108,29 @@ class Transcriber {
 
         // Ler arquivo de transcrição gerado
         const transcriptPath = path.join(outputDir, `${baseName}.txt`);
-        
+
         if (!fs.existsSync(transcriptPath)) {
           // Tentar com nome alternativo
           const files = fs.readdirSync(outputDir);
           const txtFile = files.find(f => f.startsWith(baseName) && f.endsWith('.txt'));
-          
+
           if (!txtFile) {
             reject(new Error('Arquivo de transcrição não foi gerado'));
             return;
           }
-          
+
           const altPath = path.join(outputDir, txtFile);
           const transcript = fs.readFileSync(altPath, 'utf-8').trim();
-          
+
           logger.info(`[Transcriber] ✅ Concluído em ${duration}s`);
           logger.info(`[Transcriber] Caracteres: ${transcript.length}`);
-          
+
           resolve(transcript);
           return;
         }
 
         const transcript = fs.readFileSync(transcriptPath, 'utf-8').trim();
-        
+
         logger.info(`[Transcriber] ✅ Concluído em ${duration}s`);
         logger.info(`[Transcriber] Caracteres: ${transcript.length}`);
 
@@ -177,7 +177,7 @@ class Transcriber {
    */
   async transcribeWithGroq(audioPath) {
     const groqApiKey = process.env.GROQ_API_KEY;
-    
+
     if (!groqApiKey) {
       throw new Error('GROQ_API_KEY não configurada');
     }
@@ -187,7 +187,7 @@ class Transcriber {
     // Groq usa Whisper large-v3 via API
     const FormData = require('form-data');
     const axios = require('axios');
-    
+
     const form = new FormData();
     form.append('file', fs.createReadStream(audioPath));
     form.append('model', 'whisper-large-v3');
