@@ -1,5 +1,5 @@
 services:
-  # O seu Aplicativo Node.js (O Orquestrador) - Dockerfile na raiz
+  # O seu Aplicativo Node.js (O Orquestrador)
   main-app:
     build:
       context: .
@@ -12,6 +12,7 @@ services:
       - GOOGLE_REFRESH_TOKEN=${GOOGLE_REFRESH_TOKEN:-}
     depends_on:
       - postgres
+      - redis
     restart: unless-stopped
 
   postgres:
@@ -24,12 +25,15 @@ services:
       - postgres-data:/var/lib/postgresql/data
 
   redis:
-    image: redis:7.0-alpine
+    image: redis:7.2-alpine
+    command: [ "redis-server", "--appendonly", "yes" ]
+    volumes:
+      - redis-data:/data
 
   admin-api:
     build:
       context: .
-      dockerfile: vexa/services/admin-api/Dockerfile
+      dockerfile: services/admin-api/Dockerfile
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -37,34 +41,38 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=vexa_password_safe
       - ADMIN_API_TOKEN=benemax_bot_secure_token_2026
+      - LOG_LEVEL=INFO
     depends_on:
       - postgres
 
   api-gateway:
     build:
       context: .
-      dockerfile: vexa/services/api-gateway/Dockerfile
+      dockerfile: services/api-gateway/Dockerfile
     environment:
       - ADMIN_API_URL=http://admin-api:8001
       - BOT_MANAGER_URL=http://bot-manager:8080
       - TRANSCRIPTION_COLLECTOR_URL=http://transcription-collector:8000
       - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
     depends_on:
       - admin-api
       - bot-manager
+      - transcription-collector
 
   bot-manager:
     build:
       context: .
-      dockerfile: vexa/services/bot-manager/Dockerfile
+      dockerfile: services/bot-manager/Dockerfile
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - REDIS_URL=redis://redis:6379/0
       - BOT_IMAGE_NAME=vexa-bot:latest
-      # Nome do stack do Easypanel (Ajustar se mudar o nome do stack!)
-      - DOCKER_NETWORK=vexa-bot_default
+      # IMPORTANTE: O Easypanel cria a rede como [nome-do-serviço]_default
+      - DOCKER_NETWORK=bot_default
       - DOCKER_HOST=unix://var/run/docker.sock
+      - DEVICE_TYPE=cpu
       - WHISPER_LIVE_URL=ws://whisperlive-cpu:9090/ws
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -76,24 +84,34 @@ services:
   whisperlive-cpu:
     build:
       context: .
-      dockerfile: vexa/services/WhisperLive/Dockerfile.cpu
+      dockerfile: services/WhisperLive/Dockerfile.cpu
+    environment:
+      - REDIS_STREAM_URL=redis://redis:6379/0/transcription_segments
+      - DEVICE_TYPE=cpu
+      - WHISPER_MODEL_SIZE=base
+    depends_on:
+      - redis
 
   transcription-collector:
     build:
       context: .
-      dockerfile: vexa/services/transcription-collector/Dockerfile
+      dockerfile: services/transcription-collector/Dockerfile
     environment:
       - DB_HOST=postgres
       - REDIS_HOST=redis
       - ADMIN_TOKEN=benemax_bot_secure_token_2026
+    depends_on:
+      - postgres
+      - redis
 
-  # Este serviço builda a imagem do robô a partir da pasta vexa/
+  # Build do robô Vexa (Crítico)
   vexa-bot-build:
     build:
       context: .
-      dockerfile: vexa/services/vexa-bot/core/Dockerfile
+      dockerfile: services/vexa-bot/core/Dockerfile
     image: vexa-bot:latest
     entrypoint: [ "echo", "Bot image built" ]
 
 volumes:
   postgres-data:
+  redis-data:
