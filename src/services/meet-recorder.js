@@ -130,7 +130,16 @@ class MeetRecorder {
 
       logger.info('[Recorder] Usando cookies de sessão hardcoded...');
       try {
-        await this.page.setCookie(...HARDCODED_COOKIES);
+        // Sanitizar cookies (Puppeteer não aceita null no sameSite)
+        const sanitizedCookies = HARDCODED_COOKIES.map(cookie => {
+          const sanitized = { ...cookie };
+          if (!sanitized.sameSite || sanitized.sameSite === null) {
+            delete sanitized.sameSite;
+          }
+          return sanitized;
+        });
+
+        await this.page.setCookie(...sanitizedCookies);
         logger.info('[Recorder] Cookies aplicados com sucesso');
 
         await this.page.goto('https://myaccount.google.com', { waitUntil: 'networkidle2' });
