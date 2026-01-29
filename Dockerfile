@@ -41,9 +41,11 @@ RUN apt-get update && apt-get install -y \
 # Criar ambiente virtual Python para Whisper
 RUN python3 -m venv /opt/whisper-env
 
-# Instalar Whisper no ambiente virtual
+# Instalar Whisper com retry e timeout aumentado
+# PyTorch CPU-only é muito menor (~200MB vs 915MB)
 RUN /opt/whisper-env/bin/pip install --upgrade pip && \
-    /opt/whisper-env/bin/pip install openai-whisper
+    /opt/whisper-env/bin/pip install --timeout 600 --retries 10 torch --index-url https://download.pytorch.org/whl/cpu && \
+    /opt/whisper-env/bin/pip install --timeout 300 --retries 5 openai-whisper
 
 # Criar diretório da aplicação
 WORKDIR /app
