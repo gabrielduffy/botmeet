@@ -125,10 +125,21 @@ class MeetRecorder {
         throw new Error('BOT_GOOGLE_EMAIL e BOT_GOOGLE_PASSWORD são obrigatórios');
       }
 
-      // Tentar usar cookies primeiro (Mais robusto)
-      const cookiesJson = process.env.BOT_GOOGLE_COOKIES;
-      if (cookiesJson) {
-        logger.info(`[Recorder] Variável de cookies detectada (Tamanho: ${cookiesJson.length})`);
+      // Tentar usar cookies (de variável ou arquivo)
+      let cookiesJson = process.env.BOT_GOOGLE_COOKIES;
+      const logDir = process.env.LOG_DIR || '/app/logs';
+      const cookieFile = path.join(logDir, 'cookies.json');
+
+      // Se não tem na env ou parece truncada (só o [), tenta ler do arquivo
+      if (!cookiesJson || cookiesJson.trim() === '[') {
+        if (fs.existsSync(cookieFile)) {
+          logger.info('[Recorder] Lendo cookies do arquivo persistente...');
+          cookiesJson = fs.readFileSync(cookieFile, 'utf8');
+        }
+      }
+
+      if (cookiesJson && cookiesJson.length > 2) {
+        logger.info(`[Recorder] Cookies detectados (Tamanho: ${cookiesJson.length})`);
         try {
           const cookies = JSON.parse(cookiesJson);
           await this.page.setCookie(...cookies);
@@ -139,9 +150,9 @@ class MeetRecorder {
             logger.info('[Recorder] Login realizado com sucesso via COOKIES');
             return;
           }
-          logger.warn('[Recorder] Cookies parecem expirados, tentando login via senha');
+          logger.warn('[Recorder] Cookies parecem expirados ou inválidos');
         } catch (cookieError) {
-          logger.error(`[Recorder] Erro ao aplicar cookies: ${cookieError.message}`);
+          logger.error(`[Recorder] Erro ao processar cookies: ${cookieError.message}`);
         }
       }
 
