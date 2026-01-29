@@ -46,6 +46,15 @@ services:
       - vexa-network
     restart: unless-stopped
 
+  # Serviço que força o build da imagem do robô no servidor (Para o Easypanel)
+  vexa-bot-build:
+    build:
+      context: .
+      dockerfile: services/vexa-bot/core/Dockerfile
+    image: vexa-bot:latest
+    entrypoint: [ "echo", "Bot image built" ]
+    restart: "no"
+
   api-gateway:
     build:
       context: .
