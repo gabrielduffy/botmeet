@@ -185,8 +185,8 @@ async function checkUpcomingMeetings() {
   try {
     logger.info('[Monitor] Verificando reuniões próximas...');
 
-    // Buscar reuniões nos próximos 5 minutos
-    const meetings = await calendarMonitor.getUpcomingMeetings(5);
+    // Buscar reuniões nos próximos 60 minutos
+    const meetings = await calendarMonitor.getUpcomingMeetings(60);
 
     logger.info(`[Monitor] Encontradas ${meetings.length} reuniões próximas`);
 
