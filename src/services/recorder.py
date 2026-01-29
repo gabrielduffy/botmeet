@@ -2,12 +2,21 @@ import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 import time
 import sys
 import os
 import zipfile
+import logging
 
-print("[Python Bot] >>> SCRIPT INICIADO <<<")
+# Configuração de logging detalhado
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [Python Bot] %(levelname)s: %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+
+logger = logging.getLogger(__name__)
 
 # Configurações do Proxy
 PROXY_HOST = 'gw.dataimpulse.com'
@@ -15,7 +24,13 @@ PROXY_PORT = 823
 PROXY_USER = '14e775730d7837f4aad0__cr.br'
 PROXY_PASS = '8aebbfba273d7787'
 
+# Credenciais Google (Vem do ambiente)
+GOOGLE_EMAIL = os.environ.get('BOT_GOOGLE_EMAIL')
+GOOGLE_PASS = os.environ.get('BOT_GOOGLE_PASSWORD')
+
 def create_proxy_extension():
+    """Cria uma extensão para autenticação do proxy residencial"""
+    logger.info("Criando extensão de proxy...")
     manifest_json = """
     {
         "version": "1.0.0",
@@ -43,72 +58,137 @@ def create_proxy_extension():
         ["blocking"]
     );
     """ % (PROXY_HOST, PROXY_PORT, PROXY_USER, PROXY_PASS)
-    plugin_file = 'proxy_auth_plugin.zip'
+    
+    plugin_file = '/tmp/proxy_auth_plugin.zip'
     with zipfile.ZipFile(plugin_file, 'w') as zp:
         zp.writestr("manifest.json", manifest_json)
         zp.writestr("background.js", background_js)
     return plugin_file
 
+def login_google(driver):
+    """Realiza o login na conta Google real para evitar bloqueios"""
+    if not GOOGLE_EMAIL or not GOOGLE_PASS:
+        logger.warning("Credenciais Google não encontradas. Tentando entrar como convidado...")
+        return False
+    
+    try:
+        logger.info(f"Iniciando login Google para: {GOOGLE_EMAIL}")
+        driver.get('https://accounts.google.com/signin')
+        
+        wait = WebDriverWait(driver, 20)
+        
+        # Email
+        email_field = wait.until(EC.presence_of_element_located((By.NAME, "identifier")))
+        email_field.send_keys(GOOGLE_EMAIL)
+        driver.find_element(By.ID, "identifierNext").click()
+        
+        time.sleep(3)
+        
+        # Senha
+        pass_field = wait.until(EC.element_to_be_clickable((By.NAME, "password")))
+        pass_field.send_keys(GOOGLE_PASS)
+        driver.find_element(By.ID, "passwordNext").click()
+        
+        time.sleep(5)
+        logger.info("Login realizado com sucesso (presumivelmente).")
+        return True
+    except Exception as e:
+        logger.error(f"Erro no login Google: {e}")
+        return False
+
 def start_bot(meet_url):
-    print(f"[Python Bot] Configurando Chrome para: {meet_url}")
+    logger.info(f"Configurando Chrome para reunião: {meet_url}")
+    
     options = uc.ChromeOptions()
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--use-fake-ui-for-media-stream')
     options.add_argument('--use-fake-device-for-media-stream')
     options.add_argument('--window-size=1280,720')
+    options.binary_location = '/usr/bin/chromium' # Garantir que o Chrome do Docker seja usado
     
+    # Proxy
     proxy_plugin = create_proxy_extension()
-    options.add_argument(f'--load-extension={os.path.abspath(proxy_plugin)}')
+    options.add_argument(f'--load-extension={proxy_plugin}')
     
+    driver = None
     try:
+        logger.info("Lançando Chrome indetectável...")
         driver = uc.Chrome(options=options, headless=False)
-        print(f"[Python Bot] Navegando...")
+        
+        # 1. Login
+        if login_google(driver):
+            logger.info("Logado. Navegando para o Meet...")
+        
+        # 2. Meet URL
         driver.get(meet_url)
         time.sleep(10)
         
-        # Tenta colocar o nome
+        # 3. Handle Premissões e Nome (se não logado)
         try:
-            print("[Python Bot] Tentando identificar campo de nome...")
-            # Usando seletor mais genérico e robusto
-            inputs = driver.find_elements(By.CSS_SELECTOR, 'input[type="text"]')
-            if inputs:
-                inputs[0].send_keys("Assistente Benemax")
+            name_inputs = driver.find_elements(By.CSS_SELECTOR, 'input[type="text"]')
+            if name_inputs:
+                logger.info("Campo de nome detectado. Entrando como convidado...")
+                name_inputs[0].send_keys("Assistente Benemax")
                 time.sleep(1)
-                inputs[0].send_keys(u'\ue007') # Enter
-                print("[Python Bot] Nome enviado.")
-        except Exception as e:
-            print(f"[Python Bot] Erro ao inserir nome: {e}")
+                name_inputs[0].send_keys(u'\ue007') # Enter
+        except:
+            pass
 
-        # Polling para entrar
-        for i in range(15):
-            print(f"[Python Bot] Tentativa {i+1} de clicar no botão...")
-            try:
-                # Procura botões por texto ignore case
-                btns = driver.find_elements(By.XPATH, "//button[contains(., 'Participar') or contains(., 'Join') or contains(., 'Pedir')]")
-                if not btns:
-                    btns = driver.find_elements(By.XPATH, "//div[@role='button' and (contains(., 'Participar') or contains(., 'Join') or contains(., 'Pedir'))]")
-                
-                if btns:
-                    btns[0].click()
-                    print("[Python Bot] ✅ BOTÃO CLICADO!")
-                    break
-            except:
-                pass
-            time.sleep(2)
+        # 4. Tentar clicar no botão de entrar
+        wait = WebDriverWait(driver, 30)
+        logger.info("Aguardando botão de entrada...")
+        
+        selectors = [
+            "//span[contains(text(), 'Participar')]",
+            "//span[contains(text(), 'Join')]",
+            "//span[contains(text(), 'Pedir para participar')]",
+            "//span[contains(text(), 'Ask to join')]"
+        ]
+        
+        clicked = False
+        for i in range(10):
+            for selector in selectors:
+                try:
+                    btns = driver.find_elements(By.XPATH, selector)
+                    if btns and btns[0].is_displayed():
+                        btns[0].click()
+                        logger.info(f"Botão clicado via: {selector}")
+                        clicked = True
+                        break
+                except:
+                    continue
+            if clicked: break
+            time.sleep(3)
+            logger.info(f"Tentativa {i+1} de encontrar botão...")
 
-        print("[Python Bot] Monitorando fim da reunião...")
+        if not clicked:
+            logger.error("Não foi possível encontrar o botão de entrada após 10 tentativas.")
+            # Screenshot para debug futuro (se implementado)
+            
+        logger.info("Bot dentro da reunião. Mantendo vivo...")
+        
+        # Loop de monitoramento
         while True:
-            time.sleep(10)
+            time.sleep(30)
             if "meet.google.com" not in driver.current_url:
+                logger.info("URL mudou. Reunião parece ter acabado.")
                 break
+            # Aqui poderíamos checar se estamos sozinhos na sala, etc.
+
     except Exception as e:
-        print(f"[Python Bot] ❌ CRASH: {e}")
+        logger.error(f"ERRO FATAL NO PYTHON: {e}", exc_info=True)
     finally:
-        if 'driver' in locals(): driver.quit()
-        if os.path.exists(proxy_plugin): os.remove(proxy_plugin)
+        if driver:
+            logger.info("Fechando driver...")
+            driver.quit()
+        if os.path.exists(proxy_plugin):
+            os.remove(proxy_plugin)
 
 if __name__ == "__main__":
-    url = sys.argv[1] if len(sys.argv) > 1 else ""
-    if url: start_bot(url)
-    else: print("Erro: URL vazia.")
+    if len(sys.argv) < 2:
+        logger.error("Uso: python recorder.py <MEET_URL>")
+        sys.exit(1)
+    
+    target_url = sys.argv[1]
+    start_bot(target_url)

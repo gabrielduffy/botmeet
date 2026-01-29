@@ -1,45 +1,41 @@
-# Meeting Bot - Dockerfile (Evasão Pro - DEBIAN STABLE)
+# Meeting Bot - Dockerfile (V3 Ultra-Stable)
 FROM node:20-slim
 
-# Instalar dependências do sistema - Nomes universais Debian Bookworm
+# Instalar dependências básicas e ferramentas de sistema
 RUN apt-get update && apt-get install -y \
-    chromium \
-    chromium-sandbox \
-    ffmpeg \
-    pulseaudio \
-    xvfb \
-    python3 \
-    python3-pip \
-    python3-venv \
     wget \
     curl \
     gnupg \
     ca-certificates \
+    ffmpeg \
+    pulseaudio \
+    pulseaudio-utils \
+    xvfb \
+    python3 \
+    python3-pip \
+    python3-venv \
     fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
+    libnss3 \
     libatk1.0-0 \
-    libatspi2.0-0 \
+    libatk-bridge2.0-0 \
     libcups2 \
-    libdbus-1-3 \
     libdrm2 \
     libgbm1 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxkbcommon0 \
-    libxrandr2 \
+    libasound2 \
     xdg-utils \
-    --no-install-recommends \
+    --no-install-recommends
+
+# Instalar Google Chrome Stable oficial (Melhor para Undetected Chromedriver)
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list \
+    && apt-get update \
+    && apt-get install -y google-chrome-stable --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Criar ambiente virtual Python
 RUN python3 -m venv /opt/whisper-env
 
-# Instalar Whisper e Ferramentas de Evasão (UC + Selenium)
+# Instalar dependências Python (Torch CPU-only + Evasão)
 RUN /opt/whisper-env/bin/pip install --upgrade pip && \
     /opt/whisper-env/bin/pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
     /opt/whisper-env/bin/pip install --no-cache-dir openai-whisper undetected-chromedriver selenium
@@ -49,19 +45,20 @@ COPY package*.json ./
 RUN npm install --omit=dev
 COPY . .
 
-RUN mkdir -p /app/recordings /app/transcriptions /app/logs
+# Permissões
+RUN chmod +x docker-entrypoint.sh
+RUN mkdir -p /app/recordings /app/transcriptions /app/logs /tmp && \
+    chmod -R 777 /app/recordings /app/transcriptions /app/logs /tmp
 
-# Variáveis críticas
+# Variáveis de ambiente
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable \
     DISPLAY=:99 \
     WHISPER_PATH=/opt/whisper-env/bin/whisper \
-    PYTHON_BOT_PATH=/opt/whisper-env/bin/python3
+    PYTHON_BOT_PATH=/opt/whisper-env/bin/python3 \
+    PYTHONUNBUFFERED=1
 
 EXPOSE 3000
 
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
-ENTRYPOINT ["docker-entrypoint.sh"]
+ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["node", "src/index.js"]

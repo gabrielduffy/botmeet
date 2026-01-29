@@ -11,7 +11,7 @@ class MeetRecorder {
     this.recordingProcess = null;
     this.recordingsDir = process.env.RECORDINGS_DIR || '/app/recordings';
     this.whisperPath = process.env.WHISPER_PATH || '/opt/whisper-env/bin/whisper';
-    this.pythonEnvPath = '/opt/whisper-env/bin/python3'; // Onde instalamos o UC
+    this.pythonEnvPath = process.env.PYTHON_BOT_PATH || '/opt/whisper-env/bin/python3';
 
     if (!fs.existsSync(this.recordingsDir)) fs.mkdirSync(this.recordingsDir, { recursive: true });
   }
@@ -21,97 +21,145 @@ class MeetRecorder {
   }
 
   async joinAndRecord(meetUrl, eventId) {
-    const outputPath = path.join(this.recordingsDir, `${eventId}-${Date.now()}.webm`);
-    const audioPath = path.join(this.recordingsDir, `${eventId}-${Date.now()}.wav`);
+    const timestamp = Date.now();
+    const outputPath = path.join(this.recordingsDir, `${eventId}-${timestamp}.webm`);
+    const audioPath = path.join(this.recordingsDir, `${eventId}-${timestamp}.wav`);
 
     try {
-      logger.info(`[Recorder] 🚀 Iniciando motor de evasão Python para: ${meetUrl}`);
+      logger.info(`[Recorder] 🚀 Iniciando motor Python: ${meetUrl}`);
 
-      // 1. Disparar o script Python (Undetected ChromeDriver)
+      const scriptPath = path.join(__dirname, 'recorder.py');
+
+      // Disparar o script Python
       this.pythonProcess = spawn(this.pythonEnvPath, [
-        path.join(__dirname, 'recorder.py'),
+        scriptPath,
         meetUrl,
         eventId
       ], {
-        env: { ...process.env, DISPLAY: ':99' }
+        env: {
+          ...process.env,
+          DISPLAY: ':99',
+          PYTHONUNBUFFERED: '1' // Garante logs em tempo real
+        }
       });
 
+      // Handlers de Log
       this.pythonProcess.stdout.on('data', (data) => {
-        logger.info(`[Python] ${data.toString().trim()}`);
+        const lines = data.toString().split('\n');
+        lines.forEach(line => {
+          if (line.trim()) logger.info(`[Python] ${line.trim()}`);
+        });
       });
 
       this.pythonProcess.stderr.on('data', (data) => {
-        logger.error(`[Python-Error] ${data.toString().trim()}`);
+        const lines = data.toString().split('\n');
+        lines.forEach(line => {
+          if (line.trim()) logger.error(`[Python-Error] ${line.trim()}`);
+        });
       });
 
-      // Dar tempo para o Python entrar na sala
-      await this.sleep(15000);
+      this.pythonProcess.on('error', (err) => {
+        logger.error(`[Recorder] ❌ Falha ao iniciar spawn do Python: ${err.message}`);
+      });
 
-      // 2. Iniciar a gravação do áudio via FFmpeg (PulseAudio)
-      logger.info('[Recorder] Iniciando gravação de áudio...');
-      this.startRecording(outputPath);
+      this.pythonProcess.on('close', (code) => {
+        logger.info(`[Recorder] Processo Python finalizado (code ${code})`);
+      });
 
-      // 3. Monitorar a reunião (aqui você pode implementar lógica para ver se acabou)
-      await this.monitorMeetingUntilEnd();
+      // Aguardar o bot entrar e estabilizar
+      logger.info('[Recorder] Aguardando estabilização do navegador...');
+      await this.sleep(20000);
 
-      // 4. Finalizar tudo
-      await this.stopRecording();
-      await this.stopPython();
+      // Iniciar a gravação de áudio via FFmpeg
+      logger.info('[Recorder] Iniciando captura de áudio FFmpeg...');
+      this.startAudioRecording(outputPath);
+
+      // Aguardar o fim da reunião ou timeout
+      await this.monitorMeeting();
+
+      // Limpeza
+      await this.stopAudioRecording();
+      await this.cleanupPython();
+
+      // Converter para WAV para o Whisper
       await this.convertToWav(outputPath, audioPath);
 
       return audioPath;
     } catch (error) {
-      logger.error(`[Recorder] ❌ Crash no processo: ${error.message}`);
+      logger.error(`[Recorder] ❌ Crash no fluxo: ${error.message}`);
       await this.cleanup();
       throw error;
     }
   }
 
-  startRecording(outputPath) {
+  startAudioRecording(outputPath) {
+    // Usamos pulse para capturar o áudio que o Chrome está "tocando" no sink virtual
     this.recordingProcess = spawn('ffmpeg', [
-      '-f', 'pulse', '-i', 'default',
-      '-acodec', 'libopus', outputPath, '-y'
+      '-f', 'pulse',
+      '-i', 'default', // Pulseaudio configurado no entrypoint
+      '-acodec', 'libopus',
+      '-y', outputPath
     ]);
-  }
 
-  async monitorMeetingUntilEnd() {
-    // Monitoramento simples por tempo ou por saída do processo python
-    // Por enquanto, vamos deixar o bot gravando por 10 minutos ou até o processo morrer
-    return new Promise((resolve) => {
-      let timeout = setTimeout(resolve, 600000); // 10 min de teste
-      this.pythonProcess.on('close', () => {
-        clearTimeout(timeout);
-        resolve();
-      });
+    this.recordingProcess.stderr.on('data', (data) => {
+      // ffmpeg envia progresso para stderr
     });
   }
 
-  async stopPython() {
+  async monitorMeeting() {
+    // Basicamente esperamos o processo Python fechar ou um tempo máximo
+    return new Promise((resolve) => {
+      const checkInterval = setInterval(() => {
+        if (!this.pythonProcess || this.pythonProcess.killed) {
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 5000);
+
+      // Timeout de segurança de 2 horas
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        resolve();
+      }, 2 * 60 * 60 * 1000);
+    });
+  }
+
+  async stopAudioRecording() {
+    if (this.recordingProcess) {
+      this.recordingProcess.kill('SIGINT');
+      await this.sleep(2000);
+    }
+  }
+
+  async cleanupPython() {
     if (this.pythonProcess) {
-      this.pythonProcess.kill();
+      this.pythonProcess.kill('SIGKILL');
       this.pythonProcess = null;
     }
   }
 
-  async stopRecording() {
-    if (this.recordingProcess) {
-      this.recordingProcess.kill('SIGINT');
-      this.recordingProcess = null;
-    }
+  async cleanup() {
+    await this.stopAudioRecording();
+    await this.cleanupPython();
   }
 
-  async convertToWav(inputPath, audioPath) {
-    return new Promise((res) => {
-      spawn('ffmpeg', ['-i', inputPath, '-ar', '16000', '-ac', '1', audioPath, '-y']).on('close', res);
+  getLastRecordingDuration() {
+    return "Calculado via metadados FFmpeg";
+  }
+
+  async convertToWav(inputPath, outputPath) {
+    return new Promise((resolve, reject) => {
+      if (!fs.existsSync(inputPath)) {
+        return reject(new Error(`Input file not found: ${inputPath}`));
+      }
+
+      const ffmpeg = spawn('ffmpeg', ['-i', inputPath, '-ar', '16000', '-ac', '1', '-y', outputPath]);
+      ffmpeg.on('close', (code) => {
+        if (code === 0) resolve(outputPath);
+        else reject(new Error(`FFmpeg convert failed code ${code}`));
+      });
     });
   }
-
-  async cleanup() {
-    await this.stopRecording();
-    await this.stopPython();
-  }
-
-  getLastRecordingDuration() { return 0; } // Placeholder
 }
 
 module.exports = { MeetRecorder };

@@ -1,28 +1,42 @@
 #!/bin/bash
+# Meeting Bot - Docker Entrypoint
 
-# Iniciar Xvfb (display virtual para o Chrome)
-echo "[Entrypoint] Iniciando Xvfb..."
-Xvfb :99 -screen 0 1920x1080x24 -ac &
+echo "[Entrypoint] 🚀 Iniciando ambiente virtual..."
+
+# 1. Iniciar Xvfb
+echo "[Entrypoint] Iniciando Xvfb no :99..."
+Xvfb :99 -ac -screen 0 1280x720x24 &
+export DISPLAY=:99
 sleep 2
 
-# Iniciar PulseAudio (captura de áudio)
+# 2. Iniciar PulseAudio
 echo "[Entrypoint] Iniciando PulseAudio..."
-pulseaudio --start --exit-idle-time=-1
-sleep 1
+pulseaudio --start --exit-idle-time=-1 --daemonize=no &
+sleep 2
 
-# Verificar se Whisper está instalado
+# 3. Criar Sinks Virtuais (Null Sink)
+# Isso engana o Chrome e o Meet fazendo-os pensar que há um microfone e alto-falante
+echo "[Entrypoint] Configurando dispositivos de áudio virtuais..."
+pactl load-module module-null-sink sink_name=Virtual_Sink sink_properties=device.description=Virtual_Sink
+pactl set-default-sink Virtual_Sink
+
+# Carregar o monitor do sink como fonte (Input)
+pactl load-module module-virtual-source source_name=Virtual_Mic master=Virtual_Sink.monitor
+pactl set-default-source Virtual_Mic
+
+# 4. Verificações de Sanidade
+echo "[Entrypoint] Verificando dependências..."
 if [ -f "$WHISPER_PATH" ]; then
-    echo "[Entrypoint] Whisper encontrado: $WHISPER_PATH"
+    echo "[Entrypoint] ✅ Whisper OK"
 else
-    echo "[Entrypoint] AVISO: Whisper não encontrado em $WHISPER_PATH"
+    echo "[Entrypoint] ⚠️ Whisper não encontrado em $WHISPER_PATH"
 fi
 
-# Verificar Chrome
 if [ -f "/usr/bin/chromium" ]; then
-    echo "[Entrypoint] Chromium encontrado"
+    echo "[Entrypoint] ✅ Chromium OK"
 else
-    echo "[Entrypoint] ERRO: Chromium não encontrado!"
+    echo "[Entrypoint] ❌ Chromium não encontrado!"
 fi
 
-echo "[Entrypoint] Iniciando aplicação..."
+echo "[Entrypoint] 🎯 Iniciando Aplicação Node.js..."
 exec "$@"
