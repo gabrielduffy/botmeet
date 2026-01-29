@@ -1,32 +1,60 @@
-# Meeting Bot Orchestrator - Dockerfile (SLIM)
+# Meeting Bot - Vexa Unified Dockerfile (Evasão Pro)
 FROM node:20-slim
 
-# Instalar dependências básicas
+# Instalar dependências de sistema (Chrome + Python para o Vexa)
 RUN apt-get update && apt-get install -y \
+    wget \
     curl \
-    --no-install-recommends \
+    gnupg \
+    ca-certificates \
+    ffmpeg \
+    pulseaudio \
+    xvfb \
+    python3 \
+    python3-pip \
+    python3-venv \
+    fonts-liberation \
+    libnss3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libgbm1 \
+    libasound2 \
+    xdg-utils \
+    --no-install-recommends
+
+# Instalar Google Chrome (O motor do robô indetectável)
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list \
+    && apt-get update \
+    && apt-get install -y google-chrome-stable --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
+
+# Configurar o ambiente do robô Vexa (Python)
+RUN python3 -m venv /opt/vexa-env && \
+    /opt/vexa-env/bin/pip install --upgrade pip && \
+    /opt/vexa-env/bin/pip install --no-cache-dir undetected-chromedriver selenium requests
 
 WORKDIR /app
 
-# Copiar apenas o necessário para o Node.js
+# Instalar dependências do Node.js
 COPY package*.json ./
 RUN npm install --omit=dev
 
-# Copiar o código fonte e pastas necessárias
-COPY src/ ./src/
-COPY docker-entrypoint.sh ./
+# Copiar tudo (Orquestrador + Código do Vexa)
+COPY . .
 
-# Garantir permissões básicas
-RUN mkdir -p /app/logs /tmp && \
-    chmod -R 777 /app/logs /tmp && \
-    chmod +x docker-entrypoint.sh
+# Permissões e pastas
+RUN mkdir -p /app/recordings /app/logs /tmp && \
+    chmod -R 777 /app/recordings /app/logs /tmp
 
-# Variáveis de ambiente padrão
-ENV NODE_ENV=production
+# Variáveis de ambiente para o robô
+ENV DISPLAY=:99 \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable \
+    PYTHONUNBUFFERED=1
 
 EXPOSE 3000
 
-# Usamos um entrypoint simples já que não precisamos mais de Xvfb ou PulseAudio aqui
-# O Vexa cuida de toda a parte gráfica e de áudio.
-ENTRYPOINT ["node", "src/index.js"]
+# Script de entrada que inicia o Xvfb (Virtual Display) e o seu App
+ENTRYPOINT ["sh", "-c", "Xvfb :99 -screen 0 1280x1024x24 & node src/index.js"]
