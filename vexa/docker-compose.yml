@@ -1,0 +1,142 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=${DB_NAME:-vexa}
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-vexa_password_safe}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-vexa}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vexa-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.0-alpine
+    command: [ "redis-server", "--appendonly", "yes" ]
+    volumes:
+      - redis-data:/data
+    networks:
+      - vexa-network
+    restart: unless-stopped
+
+  admin-api:
+    build:
+      context: .
+      dockerfile: services/admin-api/Dockerfile
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=vexa
+      - DB_USER=postgres
+      - DB_PASSWORD=vexa_password_safe
+      - ADMIN_API_TOKEN=${ADMIN_API_TOKEN}
+      - LOG_LEVEL=INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - vexa-network
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    ports:
+      - "8056:8000"
+    environment:
+      - ADMIN_API_URL=http://admin-api:8001
+      - BOT_MANAGER_URL=http://bot-manager:8080
+      - TRANSCRIPTION_COLLECTOR_URL=http://transcription-collector:8000
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
+    depends_on:
+      - admin-api
+      - bot-manager
+      - transcription-collector
+    networks:
+      - vexa-network
+    restart: unless-stopped
+
+  bot-manager:
+    build:
+      context: .
+      dockerfile: services/bot-manager/Dockerfile
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - BOT_IMAGE_NAME=vexa-bot:latest
+      - DOCKER_NETWORK=vexa-network
+      - LOG_LEVEL=INFO
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=vexa
+      - DB_USER=postgres
+      - DB_PASSWORD=vexa_password_safe
+      - DOCKER_HOST=unix://var/run/docker.sock
+      - DEVICE_TYPE=cpu
+      - WHISPER_LIVE_URL=ws://whisperlive-cpu:9090/ws
+      - ADMIN_TOKEN=${ADMIN_API_TOKEN}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - vexa-network
+    restart: unless-stopped
+
+  whisperlive-cpu:
+    build:
+      context: .
+      dockerfile: services/WhisperLive/Dockerfile.cpu
+    environment:
+      - REDIS_STREAM_URL=redis://redis:6379/0/transcription_segments
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_STREAM_NAME=transcription_segments
+      - DEVICE_TYPE=cpu
+      - WHISPER_MODEL_SIZE=base
+      - MIN_AUDIO_S=2.0
+    depends_on:
+      - transcription-collector
+    networks:
+      - vexa-network
+    restart: unless-stopped
+
+  transcription-collector:
+    build:
+      context: .
+      dockerfile: services/transcription-collector/Dockerfile
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=vexa
+      - DB_USER=postgres
+      - DB_PASSWORD=vexa_password_safe
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_STREAM_NAME=transcription_segments
+      - ADMIN_TOKEN=${ADMIN_API_TOKEN}
+      - LOG_LEVEL=INFO
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - vexa-network
+    restart: unless-stopped
+
+networks:
+  vexa-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  postgres-data:
