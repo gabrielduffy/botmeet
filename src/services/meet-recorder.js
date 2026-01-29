@@ -276,21 +276,24 @@ class MeetRecorder {
         }
       }
 
-      // Aguardar entrada na reunião
-      await this.sleep(5000);
+      // Aguardar e verificar se entrou de fato
+      logger.info('[Recorder] Aguardando confirmação de entrada...');
+      await this.sleep(10000); // Dá 10s para ser admitido ou carregar
 
-      // Verificar se entrou (procurar elementos da reunião ativa)
-      const inMeeting = await this.page.evaluate(() => {
-        return document.querySelector('[data-participant-id]') !== null ||
-          document.querySelector('[data-self-name]') !== null ||
-          document.querySelector('[jscontroller="xzbRj"]') !== null;
+      const meetingState = await this.page.evaluate(() => {
+        const text = document.body.innerText || "";
+        if (text.includes('Pedindo para participar') || text.includes('Asking to join')) return 'waiting';
+        if (document.querySelector('[data-participant-id]') || document.querySelector('[jscontroller="xzbRj"]')) return 'in';
+        return 'unknown';
       });
 
-      if (!inMeeting) {
-        logger.warn('[Recorder] Pode não ter entrado na reunião ainda');
+      if (meetingState === 'waiting') {
+        logger.warn('[Recorder] ⏳ Bot parado no lobby: Aguardando organizador admitir entrada');
+      } else if (meetingState === 'in') {
+        logger.info('[Recorder] ✅ Confirmado: Bot dentro da reunião');
+      } else {
+        logger.warn('[Recorder] ❓ Estado da reunião incerto, prosseguindo com gravação');
       }
-
-      logger.info('[Recorder] Entrou na reunião');
 
     } catch (error) {
       logger.error(`[Recorder] Erro ao entrar na reunião: ${error.message}`);

@@ -92,6 +92,20 @@ app.get('/logs', (req, res) => {
   `);
 });
 
+// Screenshot em tempo real (DEBUG)
+app.get('/screenshot', async (req, res) => {
+  try {
+    if (!meetRecorder || !meetRecorder.page) {
+      return res.status(404).send('Browser não iniciado ou página não disponível');
+    }
+    const screenshot = await meetRecorder.page.screenshot({ type: 'png' });
+    res.contentType('image/png');
+    res.send(screenshot);
+  } catch (error) {
+    res.status(500).send('Erro ao capturar screenshot: ' + error.message);
+  }
+});
+
 // Forçar verificação de calendário
 app.post('/check-calendar', async (req, res) => {
   try {
