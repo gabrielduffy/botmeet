@@ -77,7 +77,7 @@ class CalendarMonitor {
       });
 
       const events = response.data.items || [];
-      
+
       // Filtrar apenas eventos com Google Meet
       const meetingsWithMeet = events
         .filter(event => this.extractMeetUrl(event))
@@ -94,7 +94,7 @@ class CalendarMonitor {
         }));
 
       logger.info(`[Calendar] Encontrados ${meetingsWithMeet.length} eventos com Meet de ${events.length} total`);
-      
+
       return meetingsWithMeet;
     } catch (error) {
       logger.error(`[Calendar] Erro ao buscar eventos: ${error.message}`);
@@ -147,7 +147,7 @@ class CalendarMonitor {
       });
 
       const event = response.data;
-      
+
       return {
         id: event.id,
         summary: event.summary || 'Sem título',
