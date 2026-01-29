@@ -137,10 +137,40 @@ app.post('/join-meeting', async (req, res) => {
 // Listar próximas reuniões
 app.get('/upcoming', async (req, res) => {
   try {
-    const meetings = await calendarMonitor.getUpcomingMeetings(60); // próximos 60 min
+    const meetings = await calendarMonitor.getUpcomingMeetings(60);
     res.json({ success: true, meetings });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Controle Remoto: Digitar texto no bot (útil para 2FA)
+app.get('/type', async (req, res) => {
+  const { text } = req.query;
+  try {
+    if (!meetRecorder || !meetRecorder.page) return res.status(404).send('Bot offline');
+    await meetRecorder.page.keyboard.type(text);
+    await meetRecorder.page.keyboard.press('Enter');
+    res.send(`Texto "${text}" enviado ao bot e Enter pressionado.`);
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+// Controle Remoto: Clicar em coordenadas ou seletores via API
+app.get('/click', async (req, res) => {
+  const { x, y, selector } = req.query;
+  try {
+    if (!meetRecorder || !meetRecorder.page) return res.status(404).send('Bot offline');
+    if (selector) {
+      await meetRecorder.page.click(selector);
+      res.send(`Clicou no seletor: ${selector}`);
+    } else {
+      await meetRecorder.page.mouse.click(parseInt(x), parseInt(y));
+      res.send(`Clicou em x:${x}, y:${y}`);
+    }
+  } catch (error) {
+    res.status(500).send(error.message);
   }
 });
 

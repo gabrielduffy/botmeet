@@ -14,11 +14,11 @@ class MeetRecorder {
     this.recordingProcess = null;
     this.lastRecordingDuration = 0;
     this.recordingsDir = process.env.RECORDINGS_DIR || '/app/recordings';
+    this.userDataDir = process.env.USER_DATA_DIR || '/app/browser-data';
 
-    // Garantir que diretório existe
-    if (!fs.existsSync(this.recordingsDir)) {
-      fs.mkdirSync(this.recordingsDir, { recursive: true });
-    }
+    // Garantir que diretórios existem
+    if (!fs.existsSync(this.recordingsDir)) fs.mkdirSync(this.recordingsDir, { recursive: true });
+    if (!fs.existsSync(this.userDataDir)) fs.mkdirSync(this.userDataDir, { recursive: true });
   }
 
   /**
@@ -69,11 +69,12 @@ class MeetRecorder {
    * Inicia o browser com configurações especiais para áudio
    */
   async launchBrowser() {
-    logger.info('[Recorder] Iniciando browser...');
+    logger.info('[Recorder] Iniciando browser com perfil persistente...');
 
     this.browser = await puppeteer.launch({
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
-      headless: false, // Precisa ser false para capturar áudio
+      headless: false,
+      userDataDir: this.userDataDir, // SALVA O LOGIN AQUI
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
