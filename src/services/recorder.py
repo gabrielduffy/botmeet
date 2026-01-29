@@ -5,82 +5,134 @@ from selenium.webdriver.support import expected_conditions as EC
 import time
 import sys
 import os
-import subprocess
+import zipfile
 
-# Configurações do Meeting
-MEET_URL = sys.argv[1] if len(sys.argv) > 1 else ""
-EVENT_ID = sys.argv[2] if len(sys.argv) > 2 else "test"
-PROXY = os.getenv("RESIDENTIAL_PROXY") # Formato: http://user:pass@host:port
+# Configurações do Proxy (DataImpulse)
+PROXY_HOST = 'gw.dataimpulse.com'
+PROXY_PORT = 823
+PROXY_USER = '14e775730d7837f4aad0__cr.br'
+PROXY_PASS = '8aebbfba273d7787'
 
-def start_bot():
-    print(f"[Python Bot] Iniciando para URL: {MEET_URL}")
+def create_proxy_extension():
+    """Cria uma extensão do Chrome para autenticação do proxy no Selenium"""
+    manifest_json = """
+    {
+        "version": "1.0.0",
+        "manifest_version": 2,
+        "name": "Chrome Proxy",
+        "permissions": [
+            "proxy",
+            "tabs",
+            "unlimitedStorage",
+            "storage",
+            "<all_urls>",
+            "webRequest",
+            "webRequestBlocking"
+        ],
+        "background": {
+            "scripts": ["background.js"]
+        },
+        "minimum_chrome_version":"22.0.0"
+    }
+    """
+
+    background_js = """
+    var config = {
+            mode: "fixed_servers",
+            rules: {
+              singleProxy: {
+                scheme: "http",
+                host: "%s",
+                port: parseInt(%s)
+              },
+              bypassList: ["localhost"]
+            }
+          };
+
+    chrome.proxy.settings.set({value: config, scope: "regular"}, function() {});
+
+    chrome.webRequest.onAuthRequired.addListener(
+            function(details) {
+                return {
+                    authCredentials: {
+                        username: "%s",
+                        password: "%s"
+                    }
+                };
+            },
+            {urls: ["<all_urls>"]},
+            ["blocking"]
+    );
+    """ % (PROXY_HOST, PROXY_PORT, PROXY_USER, PROXY_PASS)
+
+    plugin_file = 'proxy_auth_plugin.zip'
+    with zipfile.ZipFile(plugin_file, 'w') as zp:
+        zp.writestr("manifest.json", manifest_json)
+        zp.writestr("background.js", background_js)
+    return plugin_file
+
+def start_bot(meet_url):
+    print(f"[Python Bot] Iniciando Evasão com Proxy Residencial Brasil...")
     
     options = uc.ChromeOptions()
-    
-    # Simulação de Desktop Real
     options.add_argument('--no-sandbox')
-    options.add_argument('--window-size=1280,720')
+    options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--use-fake-ui-for-media-stream')
     options.add_argument('--use-fake-device-for-media-stream')
     
-    # Se tiver proxy, aplica
-    if PROXY:
-        print("[Python Bot] Usando Proxy Residencial...")
-        options.add_argument(f'--proxy-server={PROXY}')
-
-    # Inicia o motor indetectável
-    driver = uc.Chrome(options=options, headless=False) # Headless=False é melhor para bypass
+    # Adiciona a extensão de proxy
+    proxy_plugin = create_proxy_extension()
+    options.add_argument(f'--load-extension={os.path.abspath(proxy_plugin)}')
+    
+    # Inicia o Chrome Indetectável
+    driver = uc.Chrome(options=options, headless=False)
     
     try:
-        driver.get(MEET_URL)
-        time.sleep(5)
+        print(f"[Python Bot] Navegando para Meet: {meet_url}")
+        driver.get(meet_url)
+        time.sleep(10) # Tempo para o proxy e página carregarem
         
-        # Aqui entra a lógica de clicar no botão "Pedir para participar" ou "Participar agora"
-        # O UC esconde o "_cdc" do driver, então o Google não vê automação básica
-        
-        print("[Python Bot] Tentando entrar na sala...")
-        
-        # Tenta encontrar o campo de nome se não estiver logado
+        # Tenta colocar o nome
         try:
-            name_input = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, 'input[aria-label*="nome"]'))
-            )
+            print("[Python Bot] Procurando campo de nome...")
+            wait = WebDriverWait(driver, 20)
+            name_input = wait.until(EC.element_to_list_of_elements_located((By.CSS_SELECTOR, 'input[type="text"]')))[0]
             name_input.send_keys("Assistente Benemax")
+            time.sleep(1)
             name_input.send_keys(u'\ue007') # Enter
-            time.sleep(2)
         except:
-            print("[Python Bot] Campo de nome não encontrado ou já logado.")
+            print("[Python Bot] Já logado ou campo de nome não visível.")
 
-        # Tenta o botão de Participar
-        join_btn_selectors = [
-            "//span[contains(text(), 'Participar')]",
-            "//span[contains(text(), 'Join')]",
-            "//span[contains(text(), 'Pedir')]"
-        ]
-        
-        for selector in join_btn_selectors:
+        # Tenta o botão de entrada (Polling)
+        for i in range(10):
             try:
-                btn = driver.find_element(By.XPATH, selector)
-                btn.click()
-                print(f"[Python Bot] Botão clicado: {selector}")
-                break
+                btns = driver.find_elements(By.XPATH, "//span[contains(text(), 'Participar') or contains(text(), 'Join') or contains(text(), 'Pedir')]")
+                if btns:
+                    btns[0].click()
+                    print("[Python Bot] ✅ Clique no botão de entrada!")
+                    break
             except:
-                continue
+                pass
+            time.sleep(2)
 
-        print("[Python Bot] Dentro da sala (teoricamente). Mantendo vivo...")
-        
-        # Aqui o bot fica vivo enquanto o processo pai precisar
+        print("[Python Bot] Bot rodando. Monitorando...")
         while True:
+            # Verifica se ainda está na página
+            if "meet.google.com" not in driver.current_url:
+                print("[Python Bot] Reunião encerrada.")
+                break
             time.sleep(10)
-            # Verifica se ainda está na sala (pode olhar o count de participantes)
-            
+
     except Exception as e:
-        print(f"[Python Bot] Erro: {e}")
+        print(f"[Python Bot] ❌ Erro: {e}")
     finally:
         driver.quit()
+        if os.path.exists(proxy_plugin):
+            os.remove(proxy_plugin)
 
 if __name__ == "__main__":
-    if not MEET_URL:
-        print("URL do Meet é obrigatória.")
+    meet_url = sys.argv[1] if len(sys.argv) > 1 else ""
+    if meet_url:
+        start_bot(meet_url)
     else:
-        start_bot()
+        print("URL do Meet é necessária.")
