@@ -32,8 +32,8 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt \
     && pip install --no-cache-dir websocket-client \
     && pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
-# Install CPU-optimized faster-whisper
-RUN pip install --no-cache-dir 'faster-whisper[cpu]'
+# Install CPU-optimized faster-whisper (Fixed version to avoid import errors)
+RUN pip install --no-cache-dir 'faster-whisper[cpu]==1.0.3'
 
 # Verify websocket installation
 RUN python3 -c "import websocket; print('Websocket module found')"
