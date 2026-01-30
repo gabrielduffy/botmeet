@@ -32,4 +32,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD /healthcheck.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["python", "run_server.py", "--port", "9090", "--backend", "faster_whisper"]
+CMD ["--port", "9090", "--backend", "faster_whisper"]
