@@ -5,3 +5,5 @@ redis
 numpy
 scipy
 torch
+requests
+ffmpeg-python
