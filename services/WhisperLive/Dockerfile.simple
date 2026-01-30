@@ -19,8 +19,8 @@ COPY services/WhisperLive/ /app/
 # Install the package using setup.py
 RUN pip install --no-cache-dir -e .
 
-# CRITICAL FIX: Force numpy < 2.0 because setup.py installs numpy 2.x which breaks onnxruntime
-RUN pip install --no-cache-dir "numpy<2.0" --force-reinstall
+# CRITICAL FIX: Force numpy < 2.0 because setup.py installs numpy 2.x which breaks# Fix numpy/onnxruntime compatibility issue and install missing redis
+RUN pip install --no-cache-dir numpy==1.24.3 onnxruntime==1.17.0 redis-reinstall
 
 # Copy scripts
 COPY services/WhisperLive/entrypoint.sh /entrypoint.sh
