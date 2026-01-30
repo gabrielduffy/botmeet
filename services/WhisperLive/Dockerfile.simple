@@ -1,0 +1,31 @@
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    portaudio19-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy the entire WhisperLive project
+COPY services/WhisperLive/ /app/
+
+# Install the package using setup.py
+RUN pip install --no-cache-dir -e .
+
+# Copy scripts
+COPY services/WhisperLive/entrypoint.sh /entrypoint.sh
+COPY services/WhisperLive/healthcheck.sh /healthcheck.sh
+RUN chmod +x /entrypoint.sh /healthcheck.sh
+
+# Expose port
+EXPOSE 9090
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD /healthcheck.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["python", "run_server.py", "--port", "9090", "--backend", "faster_whisper"]
