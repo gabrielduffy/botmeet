@@ -5,6 +5,10 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     portaudio19-dev \
     git \
+    gcc \
+    g++ \
+    make \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
