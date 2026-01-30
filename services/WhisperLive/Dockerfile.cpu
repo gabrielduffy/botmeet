@@ -35,6 +35,9 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt \
 # Install CPU-optimized faster-whisper (Fixed version to avoid import errors)
 RUN pip install --no-cache-dir 'faster-whisper[cpu]==1.0.3'
 
+# Install requests separately to save time and bust cache
+RUN pip install --no-cache-dir requests
+
 # Verify websocket installation
 RUN python3 -c "import websocket; print('Websocket module found')"
 
