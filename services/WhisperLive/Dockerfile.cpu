@@ -20,7 +20,7 @@ ENV OMP_NUM_THREADS=4
 WORKDIR /app
 
 # Copy only the requirements file first
-COPY services/WhisperLive/requirements/server.txt /tmp/requirements.txt
+COPY ./services/WhisperLive/requirements/server.txt /tmp/requirements.txt
 
 # Remove GPU-specific dependencies from requirements.txt
 RUN sed -i '/openai-whisper/d' /tmp/requirements.txt || true \
@@ -35,14 +35,14 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt \
 RUN pip install --no-cache-dir 'faster-whisper[cpu]'
 
 # Now copy the application code
-COPY services/WhisperLive/ /app/
+COPY ./services/WhisperLive/ /app/
 
 # Copy our entrypoint script
-COPY services/WhisperLive/entrypoint.sh /entrypoint.sh
+COPY ./services/WhisperLive/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Copy healthcheck script
-COPY services/WhisperLive/healthcheck.sh /healthcheck.sh
+COPY ./services/WhisperLive/healthcheck.sh /healthcheck.sh
 RUN chmod +x /healthcheck.sh
 
 # Set it as the entrypoint

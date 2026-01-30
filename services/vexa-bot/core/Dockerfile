@@ -66,7 +66,7 @@ RUN mkdir -p /root/ms-playwright && chmod -R 777 /root/ms-playwright
 RUN mkdir -p /app/storage/screenshots /app/storage/logs /app/storage/temp && chmod -R 777 /app/storage
 
 # Copy an entrypoint script that will start Xvfb and run our bot
-COPY entrypoint.sh /app/entrypoint.sh
+COPY services/vexa-bot/core/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 # Expose DISPLAY port for headful browser operations (adjust as needed)

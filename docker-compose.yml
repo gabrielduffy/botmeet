@@ -69,8 +69,8 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379/0
       - BOT_IMAGE_NAME=vexa-bot:latest
-      # IMPORTANTE: O Easypanel cria a rede como [nome-do-serviço]_default
-      - DOCKER_NETWORK=bot_default
+      # IMPORTANTE: Usando a rede vexa_default criada pelo script de inicialização
+      - DOCKER_NETWORK=vexa_default
       - DOCKER_HOST=unix://var/run/docker.sock
       - DEVICE_TYPE=cpu
       - WHISPER_LIVE_URL=ws://whisperlive-cpu:9090/ws

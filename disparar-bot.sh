@@ -19,7 +19,7 @@ if [ -z "$BOT_CONTAINER" ]; then
     exit 1
 fi
 
-docker exec $BOT_CONTAINER curl -X POST http://localhost:8000/bots \
+docker exec $BOT_CONTAINER curl -X POST http://localhost:8080/bots \
   -H "X-API-Key: benemax_bot_secure_token_2026" \
   -H "Content-Type: application/json" \
   -d "{\"platform\": \"google_meet\", \"meeting_url\": \"$MEET_URL\", \"native_meeting_id\": \"$MEETING_ID\", \"bot_name\": \"Assistente Benemax\"}"
