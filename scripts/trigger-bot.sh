@@ -33,11 +33,11 @@ echo "   • Container: $CONTAINER_NAME"
 echo "   • Event ID: $EVENT_ID"
 echo ""
 
-# Dispara o bot
-RESPONSE=$(docker exec "$CONTAINER_NAME" curl -s -X POST http://localhost:3000/join-meeting \
+# Dispara o bot (usa porta 8080 para evitar erro de Gateway)
+RESPONSE=$(docker exec "$CONTAINER_NAME" curl -s -X POST http://localhost:8080/bots \
+  -H "X-API-Key: benemax_bot_secure_token_2026" \
   -H "Content-Type: application/json" \
-  -d "{\"meetUrl\": \"$MEETING_URL\", \"eventId\": \"$EVENT_ID\"}")
-
+  -d '{"platform":"google_meet","meeting_url":"'"$MEETING_URL"'","native_meeting_id":"'$(echo $MEETING_URL | cut -d'/' -f5)'","bot_config":{"bot_name":"Assistente Benemax"}}')
 echo "📡 Resposta do servidor:"
 echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
 echo ""

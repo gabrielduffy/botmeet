@@ -6,8 +6,11 @@ const { logger } = require('../utils/logger');
 class MeetRecorder {
   constructor() {
     // URL interna do Docker para o api-gateway do Vexa
-    this.vexaApiUrl = process.env.VEXA_API_URL || 'http://api-gateway:8000';
+    this.botManagerUrl = process.env.BOT_MANAGER_URL || 'http://localhost:8080';
+    this.vexaApiUrl = process.env.VEXA_API_URL || 'http://localhost:8000'; // Mantido para compatibilidade, mas o botManagerUrl é o principal
     this.adminToken = process.env.ADMIN_API_TOKEN || 'benemax_bot_secure_token_2026';
+
+    // Inicializa mapa de bots ativos
     this.activeVexaBots = new Map(); // Armazena botId -> meetingId
   }
 
@@ -26,7 +29,8 @@ class MeetRecorder {
       // Extrai o meeting ID da URL (ex: rej-fpxv-zac de https://meet.google.com/rej-fpxv-zac)
       const meetingId = meetUrl.split('/').pop();
 
-      const response = await axios.post(`${this.vexaApiUrl}/bots`, {
+      // Alterado para usar this.botManagerUrl
+      const response = await axios.post(`${this.botManagerUrl}/bots`, {
         platform: "google_meet",  // Underscore, não hífen
         meeting_url: meetUrl,
         native_meeting_id: meetingId,  // Campo obrigatório
