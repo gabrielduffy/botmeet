@@ -23,9 +23,13 @@ class MeetRecorder {
       logger.info(`[Vexa-Orchestrator] Solicitando bot para: ${meetUrl}`);
 
       // A rota descoberta no Gateway é /bots
+      // Extrai o meeting ID da URL (ex: rej-fpxv-zac de https://meet.google.com/rej-fpxv-zac)
+      const meetingId = meetUrl.split('/').pop();
+
       const response = await axios.post(`${this.vexaApiUrl}/bots`, {
-        platform: "google-meet",
+        platform: "google_meet",  // Underscore, não hífen
         meeting_url: meetUrl,
+        native_meeting_id: meetingId,  // Campo obrigatório
         bot_config: {
           bot_name: "Assistente Benemax",
           automatic_leave: {
@@ -43,7 +47,7 @@ class MeetRecorder {
       });
 
       const botData = response.data;
-      logger.info(`[Vexa-Orchestrator] ✅ Bot disparado com sucesso! ID: ${botData.bot_id}`);
+      logger.info(`[Vexa-Orchestrator] ✅ Bot disparado com sucesso! ID: ${botData.id}`);
 
       // Armazenamos para controle futuro se necessário
       this.activeVexaBots.set(eventId, botData.bot_id);
