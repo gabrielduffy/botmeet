@@ -112,6 +112,11 @@ services:
     image: vexa-bot:latest
     entrypoint: [ "echo", "Bot image built" ]
 
+networks:
+  default:
+    name: vexa_default
+    external: true
+
 volumes:
   postgres-data:
   redis-data:
