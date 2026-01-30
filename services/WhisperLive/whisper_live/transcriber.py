@@ -1886,7 +1886,11 @@ def get_suppressed_tokens(
 ) -> Optional[List[int]]:
     if -1 in suppress_tokens:
         suppress_tokens = [t for t in suppress_tokens if t >= 0]
-        suppress_tokens.extend(tokenizer.non_speech_tokens)
+        # Fix for faster-whisper 1.0.3: access non_speech_tokens via the underlying tokenizer instance
+        try:
+             suppress_tokens.extend(tokenizer.non_speech_tokens)
+        except AttributeError:
+             suppress_tokens.extend(tokenizer.tokenizer.non_speech_tokens)
     elif suppress_tokens is None or len(suppress_tokens) == 0:
         suppress_tokens = []  # interpret empty string as an empty list
     else:
