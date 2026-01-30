@@ -2447,9 +2447,9 @@ class ServeClientFasterWhisper(ServeClientBase):
         # Log the critical parameters
         logging.info(f"Initializing FasterWhisper client {client_uid} with platform={platform}, meeting_url={meeting_url}, token={token}")
 
-        self.model_size_or_path = model
+        self.model_size_or_path = model or "small"
         # If model is English-only, auto-set language to "en" (this counts as provided)
-        if self.model_size_or_path.endswith("en"):
+        if self.model_size_or_path and self.model_size_or_path.endswith("en"):
             self.language = "en"
             self.language_provided = True  # Model-based language is considered "provided"
         else:
