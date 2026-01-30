@@ -73,8 +73,8 @@ services:
       - DOCKER_NETWORK=vexa_default
       - DOCKER_HOST=unix://var/run/docker.sock
       - DEVICE_TYPE=cpu
-      - WHISPER_LIVE_URL=ws://whisperlive-cpu:9090/ws
-      - DB_HOST=postgres
+      - WHISPER_LIVE_URL=ws://whisperlive:9090/ws
+      - REDIS_URL=redis://sortebem_redisbot:6379/0
       - DB_PORT=5432
       - DB_NAME=vexa
       - DB_USER=postgres
@@ -86,7 +86,8 @@ services:
       context: .
       dockerfile: services/WhisperLive/Dockerfile.cpu
     environment:
-      - REDIS_STREAM_URL=redis://redis:6379/0/transcription_segments
+      - REDIS_STREAM_URL=redis://sortebem_redisbot:6379/0/transcription_segments
+      - REDIS_URL=redis://sortebem_redisbot:6379/0
       - DEVICE_TYPE=cpu
       - WHISPER_MODEL_SIZE=base
     depends_on:
@@ -114,7 +115,7 @@ services:
 
 networks:
   default:
-    name: vexa_default
+    name: easypanel-sortebem
     external: true
 
 volumes:
