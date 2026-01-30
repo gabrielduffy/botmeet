@@ -18,6 +18,8 @@ echo "🎙️ Iniciando WhisperLive (Transcrição em Tempo Real)..."
 docker run -d \
   --name whisperlive \
   --restart unless-stopped \
+  --network easypanel-sortebem \
+  -e REDIS_STREAM_URL='redis://default:412trocar@sortebem_redisbot:6379' \
   -p 9090:9090 \
   whisperlive:latest
 
