@@ -16,11 +16,11 @@ WORKDIR /app
 # Copy the entire WhisperLive project
 COPY services/WhisperLive/ /app/
 
-# Fix numpy/onnxruntime compatibility issue
-RUN pip install --no-cache-dir numpy==1.24.3 onnxruntime==1.17.0
-
 # Install the package using setup.py
 RUN pip install --no-cache-dir -e .
+
+# CRITICAL FIX: Force numpy < 2.0 because setup.py installs numpy 2.x which breaks onnxruntime
+RUN pip install --no-cache-dir "numpy<2.0" --force-reinstall
 
 # Copy scripts
 COPY services/WhisperLive/entrypoint.sh /entrypoint.sh
