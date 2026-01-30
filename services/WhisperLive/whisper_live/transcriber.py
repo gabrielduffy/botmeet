@@ -509,7 +509,7 @@ class BatchedInferencePipeline:
         )
 
         features = (
-            np.stack([pad_or_trim(feature, self.model.feature_extractor.n_samples) for feature in features]) if features else []
+            np.stack([pad_or_trim(feature, self.model.feature_extractor.nb_max_frames) for feature in features]) if features else []
         )
 
         options = TranscriptionOptions(
@@ -1176,7 +1176,7 @@ class WhisperModel:
             )
             segment = features[:, seek : seek + segment_size]
             segment_duration = segment_size * self.feature_extractor.time_per_frame
-            segment = pad_or_trim(segment, self.model.feature_extractor.n_samples)
+            segment = pad_or_trim(segment, self.model.feature_extractor.nb_max_frames)
 
             if self.logger.isEnabledFor(logging.DEBUG):
                 self.logger.debug(
@@ -1817,7 +1817,7 @@ class WhisperModel:
         detected_language_info = {}
         for i in range(0, features.shape[-1], self.feature_extractor.nb_max_frames):
             encoder_output = self.encode(
-                pad_or_trim(features[..., i : i + self.feature_extractor.nb_max_frames], self.feature_extractor.n_samples)
+                pad_or_trim(features[..., i : i + self.feature_extractor.nb_max_frames], self.feature_extractor.nb_max_frames)
             )
             # results is a list of tuple[str, float] with language names and probabilities.
             results = self.model.detect_language(encoder_output)[0]
