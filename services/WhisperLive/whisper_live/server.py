@@ -8,7 +8,10 @@ import hashlib
 from enum import Enum
 from typing import List, Optional
 import datetime
-import websocket
+try:
+    import websocket
+except ImportError:
+    import _websocket as websocket # Failover common in some environments
 import sys # Added sys import
 import socket  # Added to resolve container IP for ws_url
 
