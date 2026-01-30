@@ -509,7 +509,7 @@ class BatchedInferencePipeline:
         )
 
         features = (
-            np.stack([pad_or_trim(feature) for feature in features]) if features else []
+            np.stack([pad_or_trim(feature, self.model.feature_extractor.n_samples) for feature in features]) if features else []
         )
 
         options = TranscriptionOptions(
