@@ -1,13 +1,36 @@
 services:
-  whisperlive-cpu:
+  main-app:
     build:
       context: .
-      dockerfile: services/WhisperLive/Dockerfile.cpu
+      dockerfile: Dockerfile
     environment:
-      - REDIS_STREAM_URL=redis://default:412trocar@sortebem_redisbot:6379/0/transcription_segments
+      - VEXA_API_URL=http://api-gateway:8000
+      - ADMIN_API_TOKEN=benemax_bot_secure_token_2026
+    restart: unless-stopped
+
+  admin-api:
+    build:
+      context: .
+      dockerfile: services/admin-api/Dockerfile
+    environment:
+      - DB_HOST=sortebem_postgresbot
+      - DB_PORT=5432
+      - DB_NAME=bot
+      - DB_USER=bot
+      - DB_PASSWORD=412trocar
+      - ADMIN_API_TOKEN=benemax_bot_secure_token_2026
+      - LOG_LEVEL=INFO
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    environment:
+      - ADMIN_API_URL=http://admin-api:8001
+      - BOT_MANAGER_URL=http://bot-manager:8080
+      - TRANSCRIPTION_COLLECTOR_URL=http://transcription-collector:8000
       - REDIS_URL=redis://default:412trocar@sortebem_redisbot:6379/0
-      - DEVICE_TYPE=cpu
-      - WHISPER_MODEL_SIZE=base
+      - LOG_LEVEL=INFO
 
   bot-manager:
     build:
@@ -28,6 +51,32 @@ services:
       - DB_USER=bot
       - DB_PASSWORD=412trocar
       - ADMIN_TOKEN=benemax_bot_secure_token_2026
+
+  whisperlive-cpu:
+    build:
+      context: .
+      dockerfile: services/WhisperLive/Dockerfile.cpu
+    environment:
+      - REDIS_STREAM_URL=redis://default:412trocar@sortebem_redisbot:6379/0/transcription_segments
+      - REDIS_URL=redis://default:412trocar@sortebem_redisbot:6379/0
+      - DEVICE_TYPE=cpu
+      - WHISPER_MODEL_SIZE=base
+
+  transcription-collector:
+    build:
+      context: .
+      dockerfile: services/transcription-collector/Dockerfile
+    environment:
+      - DB_HOST=sortebem_postgresbot
+      - REDIS_HOST=sortebem_redisbot
+      - ADMIN_TOKEN=benemax_bot_secure_token_2026
+
+  vexa-bot-build:
+    build:
+      context: .
+      dockerfile: services/vexa-bot/core/Dockerfile
+    image: vexa-bot:latest
+    entrypoint: [ "echo", "Bot image built" ]
 
 networks:
   default:
