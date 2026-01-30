@@ -1,5 +1,7 @@
 faster-whisper
 websockets
+websocket-client
 redis
 numpy
 scipy
+torch
