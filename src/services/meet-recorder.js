@@ -6,8 +6,8 @@ const { logger } = require('../utils/logger');
 class MeetRecorder {
   constructor() {
     // URL interna do Docker para o api-gateway do Vexa
-    this.botManagerUrl = process.env.BOT_MANAGER_URL || 'http://localhost:8080';
-    this.vexaApiUrl = process.env.VEXA_API_URL || 'http://localhost:8000'; // Mantido para compatibilidade, mas o botManagerUrl é o principal
+    this.botManagerUrl = process.env.BOT_MANAGER_URL || 'http://api-gateway:8000';
+    this.vexaApiUrl = process.env.VEXA_API_URL || 'http://api-gateway:8000';
     this.adminToken = process.env.ADMIN_API_TOKEN || 'benemax_bot_secure_token_2026';
 
     // Inicializa mapa de bots ativos
