@@ -233,8 +233,17 @@ class TranscriptionCollectorClient:
             return False
             
         # Validate required fields
+        if 'meeting_id' not in config:
+            logging.error("Missing required fields: meeting_id")
+            return False
+        
+        token = config.get('token')
+        platform = config.get('platform')
+        meeting_id = config.get('meeting_id')
+        meeting_url = config.get('meeting_url', 'unknown_live_session') # Add fallback for meeting_url
+        
         if not all([token, platform, meeting_id, session_uid]):
-            logging.error("Missing required fields for session_start event")
+            logging.error(f"Missing required fields for session_start event: token={token}, platform={platform}, meeting_id={meeting_id}, session_uid={session_uid}")
             return False
             
         try:
