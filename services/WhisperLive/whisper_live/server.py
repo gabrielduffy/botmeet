@@ -928,7 +928,14 @@ class TranscriptionServer:
         
         # Process as binary audio data
         try:
-            return np.frombuffer(frame_data, dtype=np.float32)
+            # Ensure audio data is compatible with NumPy 2.x and FasterWhisper (contiguous float32)
+            audio_array = np.frombuffer(frame_data, dtype=np.float32).copy()
+            
+            # Optional: Log small sample for debugging if WL_LOG_CONTROL_EVENTS is enabled
+            if WL_LOG_CONTROL_EVENTS:
+                logging.debug(f"Received audio packet: {len(frame_data)} bytes, sample shape: {audio_array.shape}")
+                
+            return audio_array
         except (ValueError, TypeError) as e:
             logging.error(f"Failed to process audio data: {e}")
             return None
@@ -1026,8 +1033,8 @@ class TranscriptionServer:
             logging.info(f"Received raw message from client: {options}")
             options = json.loads(options)
             
-            # Validate required parameters
-            required_fields = ["uid", "platform", "meeting_url", "token", "meeting_id"]
+            # Validate required parameters (making meeting fields optional with fallbacks)
+            required_fields = ["uid", "platform", "token"]
             missing_fields = [field for field in required_fields if field not in options or not options[field]]
             
             if missing_fields:
@@ -1040,6 +1047,10 @@ class TranscriptionServer:
                 }))
                 websocket.close()
                 return False
+            
+            # Fallback for optional fields
+            options["meeting_url"] = options.get("meeting_url", "No meeting URL")
+            options["meeting_id"] = options.get("meeting_id", "test_session")
                 
             # Log the connection with critical parameters
             logging.info(f"Connection parameters received: uid={options['uid']}, platform={options['platform']}, meeting_url={options['meeting_url']}, token={options['token']}, meeting_id={options['meeting_id']}")
