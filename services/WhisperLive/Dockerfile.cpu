@@ -30,6 +30,7 @@ RUN sed -i '/openai-whisper/d' /tmp/requirements.txt || true \
 RUN pip install --no-cache-dir -r /tmp/requirements.txt \
     && pip install --no-cache-dir onnxruntime \
     && pip install --no-cache-dir websocket-client \
+    && pip install --no-cache-dir soundfile \
     && pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
 # Install CPU-optimized faster-whisper (Fixed version to avoid import errors)
