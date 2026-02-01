@@ -1890,7 +1890,10 @@ def get_suppressed_tokens(
         try:
              suppress_tokens.extend(tokenizer.non_speech_tokens)
         except AttributeError:
-             suppress_tokens.extend(tokenizer.tokenizer.non_speech_tokens)
+             try:
+                  suppress_tokens.extend(tokenizer.tokenizer.non_speech_tokens)
+             except AttributeError:
+                  logging.warning("Tokenizer has no attribute 'non_speech_tokens', skipping suppression of those tokens.")
     elif suppress_tokens is None or len(suppress_tokens) == 0:
         suppress_tokens = []  # interpret empty string as an empty list
     else:
