@@ -51,6 +51,7 @@ except Exception as e:
 from fastapi.responses import HTMLResponse
 from app.routes.tokens import router as tokens_router
 from app.routes.templates import router as templates_router
+from app.tokens_page import TOKENS_PAGE_HTML
 
 # --- Status Transition Helper ---
 
@@ -786,6 +787,11 @@ async def admin_cleanup():
     if not DASHBOARD_AVAILABLE:
         return {"success": False, "error": "Dashboard modules not loaded"}
     return await remove_exited_containers()
+
+@app.get("/tokens", response_class=HTMLResponse, include_in_schema=False)
+async def tokens_page():
+    """Serve the API tokens management page."""
+    return HTMLResponse(content=TOKENS_PAGE_HTML)
 
 @app.post("/bots",
           response_model=MeetingResponse,
