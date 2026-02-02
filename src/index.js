@@ -3,6 +3,7 @@
 
 require('dotenv').config();
 const express = require('express');
+const axios = require('axios');
 const cron = require('node-cron');
 const { logger } = require('./utils/logger');
 const { CalendarMonitor } = require('./services/calendar-monitor');
@@ -22,6 +23,51 @@ const webhookSender = new WebhookSender();
 // Estado das reuniões ativas
 const activeMeetings = new Map();
 const processedMeetings = new Set();
+
+// ═══════════════════════════════════════════════════════════════════
+// PROXY PARA O DASHBOARD (BOT-MANAGER)
+// ═══════════════════════════════════════════════════════════════════
+
+const BOT_MANAGER_INTERNAL_URL = process.env.BOT_MANAGER_URL || 'http://bot-manager:8080';
+
+// Dashboard Principal
+app.get('/', async (req, res) => {
+  try {
+    const response = await axios.get(BOT_MANAGER_INTERNAL_URL + '/', {
+      timeout: 5000
+    });
+    res.send(response.data);
+  } catch (error) {
+    logger.error(`[Proxy] Erro ao carregar Dashboard: ${error.message}`);
+    res.status(500).send(`
+      <body style="background:#09090b; color:#fafafa; font-family:sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0;">
+        <div style="text-align:center;">
+          <h1 style="color:#ef4444;">Sistema Offline</h1>
+          <p style="color:#a1a1aa;">O Bot Manager não respondeu. Tente reiniciar os serviços.</p>
+          <button onclick="location.reload()" style="background:#3b82f6; border:none; color:white; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:600;">Tentar Novamente</button>
+        </div>
+      </body>
+    `);
+  }
+});
+
+// Proxy para as APIs de diagnóstico e ações
+app.all('/api/admin/*', async (req, res) => {
+  const targetUrl = `${BOT_MANAGER_INTERNAL_URL}${req.originalUrl}`;
+  try {
+    const response = await axios({
+      method: req.method,
+      url: targetUrl,
+      data: req.body,
+      headers: { ...req.headers, host: 'bot-manager:8080' },
+      timeout: 10000
+    });
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    logger.error(`[Proxy API] Erro em ${targetUrl}: ${error.message}`);
+    res.status(error.response?.status || 500).json(error.response?.data || { error: error.message });
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // ROTAS DA API
