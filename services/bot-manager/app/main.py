@@ -39,7 +39,10 @@ from sqlalchemy.future import select
 from sqlalchemy import and_, desc, func
 from datetime import datetime # For start_time
 try:
-    from .dashboard import get_system_stats, get_all_containers_status, kill_all_bots, restart_container
+    from .dashboard import (
+        get_system_stats, get_all_containers_status, 
+        kill_all_bots, restart_container, stop_single_container
+    )
     DASHBOARD_AVAILABLE = True
 except Exception as e:
     logging.error(f"Dashboard components failed to load: {e}")
@@ -438,277 +441,179 @@ async def root():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>BotMeet | Command Center</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+        <title>BotMeet | Admin Command Center</title>
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
         <style>
             :root {
-                --bg: #09090b;
-                --card-bg: rgba(24, 24, 27, 0.8);
-                --border: rgba(39, 39, 42, 0.5);
-                --accent: #3b82f6;
+                --primary: #8b5cf6;
+                --primary-dark: #6d28d9;
+                --bg: #050505;
+                --card-bg: rgba(18, 18, 22, 0.7);
+                --border: rgba(139, 92, 246, 0.2);
+                --text: #ffffff;
+                --text-muted: #94a3b8;
                 --danger: #ef4444;
-                --success: #22c55e;
-                --text: #fafafa;
-                --text-muted: #a1a1aa;
+                --success: #10b981;
+                --warning: #f59e0b;
+                --radius: 12px;
             }
 
             * { margin: 0; padding: 0; box-sizing: border-box; }
-
-            body {
-                background: var(--bg);
-                color: var(--text);
-                font-family: 'Inter', sans-serif;
-                overflow-x: hidden;
-                min-height: 100vh;
+            body { 
+                background: var(--bg); 
+                color: var(--text); 
+                font-family: 'Poppins', sans-serif; 
+                line-height: 1.5; 
+                -webkit-font-smoothing: antialiased;
+                background-image: 
+                    radial-gradient(circle at 0% 0%, rgba(109, 40, 149, 0.15) 0%, transparent 40%),
+                    radial-gradient(circle at 100% 100%, rgba(76, 29, 149, 0.1) 0%, transparent 40%);
+                background-attachment: fixed;
             }
 
-            .container {
-                max-width: 1200px;
-                margin: 0 auto;
-                padding: 40px 20px;
-            }
+            .container { max-width: 1400px; margin: 0 auto; padding: 2rem 1.5rem; }
 
-            header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 40px;
-            }
+            /* Header Section */
+            header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3rem; flex-wrap: wrap; gap: 1rem; }
+            .brand { display: flex; align-items: center; gap: 0.75rem; }
+            .brand .icon { width: 12px; height: 12px; background: var(--primary); border-radius: 50%; box-shadow: 0 0 15px var(--primary); animation: pulse 2s infinite; }
+            .brand h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
 
-            .logo {
-                font-size: 24px;
-                font-weight: 700;
-                letter-spacing: -1px;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-            }
+            @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1); } }
 
-            .logo .dot {
-                width: 8px;
-                height: 8px;
-                background: var(--accent);
-                border-radius: 50%;
-                box-shadow: 0 0 15px var(--accent);
-            }
+            .badge-online { display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); color: var(--success); padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.85rem; font-weight: 600; }
 
-            .status-badge {
-                padding: 6px 14px;
-                border-radius: 20px;
-                background: rgba(34, 197, 94, 0.1);
-                color: var(--success);
-                font-size: 13px;
-                font-weight: 600;
-                border: 1px solid rgba(34, 197, 94, 0.2);
-                display: flex;
-                align-items: center;
-                gap: 8px;
-            }
+            /* Stats Grid */
+            .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-bottom: 3rem; }
+            .stat-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; backdrop-filter: blur(10px); transition: transform 0.3s ease, border-color 0.3s ease; }
+            .stat-card:hover { border-color: var(--primary); transform: translateY(-3px); }
+            .stat-card h3 { color: var(--text-muted); font-size: 0.85rem; font-weight: 500; text-transform: uppercase; margin-bottom: 1rem; }
+            .stat-value { font-size: 2.25rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--text); }
+            .stat-progress { height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; margin-top: 1rem; overflow: hidden; }
+            .stat-progress-inner { height: 100%; background: linear-gradient(90deg, var(--primary-dark), var(--primary)); width: 0%; transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
 
-            .grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                gap: 20px;
-                margin-bottom: 40px;
-            }
+            /* Table Section */
+            .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+            .section-header h2 { font-size: 1.25rem; font-weight: 600; }
 
-            .card {
-                background: var(--card-bg);
-                backdrop-filter: blur(12px);
-                border: 1px solid var(--border);
-                border-radius: 16px;
-                padding: 24px;
-                transition: transform 0.2s, border-color 0.2s;
-            }
+            .table-container { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); overflow-x: auto; backdrop-filter: blur(10px); }
+            table { width: 100%; border-collapse: collapse; min-width: 800px; }
+            th { text-align: left; padding: 1rem 1.5rem; color: var(--text-muted); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+            td { padding: 1.25rem 1.5rem; font-size: 0.9rem; border-bottom: 1px solid var(--border); }
+            tr:last-child td { border-bottom: none; }
+            
+            .id-badge { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; background: rgba(255,255,255,0.05); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--primary); }
+            .container-name { font-weight: 600; }
+            .image-badge { font-size: 0.75rem; color: var(--text-muted); }
+            
+            .status-pill { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem; font-weight: 500; }
+            .status-running { background: rgba(16, 185, 129, 0.1); color: var(--success); }
+            .status-exited { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
 
-            .card:hover {
-                border-color: var(--accent);
-            }
+            /* Actions */
+            .action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 3rem; }
+            .action-card { background: linear-gradient(135deg, rgba(139, 92, 246, 0.05), rgba(76, 29, 149, 0.05)); border: 1px dashed var(--border); border-radius: var(--radius); padding: 1.5rem; display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; }
+            .action-info h4 { font-size: 1rem; margin-bottom: 0.25rem; }
+            .action-info p { font-size: 0.8rem; color: var(--text-muted); }
 
-            .card-title {
-                font-size: 14px;
-                font-weight: 600;
-                color: var(--text-muted);
-                margin-bottom: 16px;
-                text-transform: uppercase;
-                letter-spacing: 1px;
-            }
+            /* Buttons */
+            .btn { display: inline-flex; align-items: center; justify-content: center; padding: 0.6rem 1.2rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; border: none; transition: all 0.2s; gap: 0.5rem; font-family: inherit; }
+            .btn-primary { background: var(--primary); color: white; }
+            .btn-primary:hover { background: var(--primary-dark); box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3); }
+            .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+            .btn-outline:hover { background: rgba(255,255,255,0.05); border-color: var(--primary); }
+            .btn-danger { background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.2); }
+            .btn-danger:hover { background: var(--danger); color: white; }
+            .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; border-radius: 6px; }
 
-            .stats-value {
-                font-size: 32px;
-                font-weight: 700;
-                font-family: 'JetBrains Mono', monospace;
-            }
+            /* Toast */
+            #toast { position: fixed; bottom: 2rem; right: 2rem; padding: 1rem 1.5rem; background: var(--primary-dark); color: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); transform: translateY(150%); transition: transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28); z-index: 1000; border: 1px solid var(--primary); }
+            #toast.show { transform: translateY(0); }
 
-            .progress-bar {
-                width: 100%;
-                height: 6px;
-                background: rgba(255,255,255,0.05);
-                border-radius: 3px;
-                margin-top: 12px;
-                overflow: hidden;
+            /* Responsive Adjustments */
+            @media (max-width: 768px) {
+                .container { padding: 1rem; }
+                header { margin-bottom: 2rem; }
+                .stats-grid { gap: 1rem; }
+                .action-card { flex-direction: column; text-align: center; }
             }
-
-            .progress-inner {
-                height: 100%;
-                background: var(--accent);
-                transition: width 1s ease-in-out;
-            }
-
-            .bots-list {
-                margin-top: 40px;
-            }
-
-            table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-top: 20px;
-            }
-
-            th {
-                text-align: left;
-                padding: 12px;
-                color: var(--text-muted);
-                font-size: 13px;
-                border-bottom: 1px solid var(--border);
-            }
-
-            td {
-                padding: 16px 12px;
-                border-bottom: 1px solid var(--border);
-                font-size: 14px;
-            }
-
-            .image-tag {
-                font-family: 'JetBrains Mono', monospace;
-                font-size: 12px;
-                background: rgba(255,255,255,0.05);
-                padding: 4px 8px;
-                border-radius: 4px;
-            }
-
-            .btn {
-                padding: 10px 20px;
-                border-radius: 8px;
-                font-weight: 600;
-                cursor: pointer;
-                border: none;
-                transition: all 0.2s;
-                font-size: 13px;
-            }
-
-            .btn-danger {
-                background: var(--danger);
-                color: white;
-            }
-
-            .btn-danger:hover {
-                opacity: 0.8;
-                box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
-            }
-
-            .btn-outline {
-                background: transparent;
-                border: 1px solid var(--border);
-                color: var(--text);
-            }
-
-            .btn-outline:hover {
-                background: var(--border);
-            }
-
-            .action-hub {
-                display: flex;
-                gap: 15px;
-                margin-top: 40px;
-                background: rgba(255,255,255,0.02);
-                padding: 24px;
-                border-radius: 16px;
-                border: 1px dashed var(--border);
-            }
-
-            .toast {
-                position: fixed;
-                bottom: 20px;
-                right: 20px;
-                padding: 12px 24px;
-                background: var(--accent);
-                border-radius: 8px;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-                transform: translateY(100px);
-                transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-                z-index: 1000;
-            }
-
-            .toast.show { transform: translateY(0); }
         </style>
     </head>
     <body>
         <div class="container">
             <header>
-                <div class="logo">
-                    <div class="dot"></div>
-                    BOTMEET COMMAND
+                <div class="brand">
+                    <div class="icon"></div>
+                    <h1>BOTMEET COMMAND</h1>
                 </div>
-                <div class="status-badge">
+                <div class="badge-online">
                     <div style="width: 8px; height: 8px; background: var(--success); border-radius: 50%;"></div>
-                    API ONLINE
+                    INFRA OK
                 </div>
             </header>
 
-            <div class="grid">
-                <div class="card">
-                    <div class="card-title">Processamento CPU</div>
-                    <div class="stats-value" id="cpu-val">--%</div>
-                    <div class="progress-bar"><div class="progress-inner" id="cpu-bar" style="width: 0%"></div></div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Processamento CPU</h3>
+                    <div class="stat-value" id="cpu-val">--%</div>
+                    <div class="stat-progress"><div class="stat-progress-inner" id="cpu-bar"></div></div>
                 </div>
-                <div class="card">
-                    <div class="card-title">Memória RAM</div>
-                    <div class="stats-value" id="mem-val">--%</div>
-                    <div class="progress-bar"><div class="progress-inner" id="mem-bar" style="width: 0%"></div></div>
+                <div class="stat-card">
+                    <h3>Memória RAM</h3>
+                    <div class="stat-value" id="mem-val">--%</div>
+                    <div class="stat-progress"><div class="stat-progress-inner" id="mem-bar"></div></div>
                 </div>
-                <div class="card">
-                    <div class="card-title">Uso de Disco</div>
-                    <div class="stats-value" id="disk-val">--%</div>
-                    <div class="progress-bar"><div class="progress-inner" id="disk-bar" style="width: 0%"></div></div>
-                </div>
-            </div>
-
-            <div class="bots-list">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <h2 style="font-size: 20px; font-weight: 700;">Recursos em Operação</h2>
-                    <button class="btn btn-outline" onclick="loadContainers()">Recarregar Lista</button>
-                </div>
-                <div class="card" style="margin-top: 20px; padding: 0; overflow: hidden;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>NOME DO CONTAINER</th>
-                                <th>IMAGEM</th>
-                                <th>STATUS</th>
-                                <th>AÇÕES</th>
-                            </tr>
-                        </thead>
-                        <tbody id="container-body">
-                            <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Carregando containers...</td></tr>
-                        </tbody>
-                    </table>
+                <div class="stat-card">
+                    <h3>Uso de Disco</h3>
+                    <div class="stat-value" id="disk-val">--%</div>
+                    <div class="stat-progress"><div class="stat-progress-inner" id="disk-bar"></div></div>
                 </div>
             </div>
 
-            <div class="action-hub">
-                <div style="flex: 1">
-                    <h3 style="font-size: 16px; margin-bottom: 4px;">Controles Críticos</h3>
-                    <p style="font-size: 13px; color: var(--text-muted);">Ações de emergência para estabilização imediata do sistema.</p>
+            <div class="section-header">
+                <h2>Recursos em Operação</h2>
+                <button class="btn btn-outline" onclick="loadContainers()">Recarregar</button>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Identificador</th>
+                            <th>NOME DO container</th>
+                            <th>Imagem</th>
+                            <th>Status atual</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="container-body">
+                        <tr><td colspan="5" style="text-align: center; padding: 3rem; color: var(--text-muted);">Consultando infraestrutura...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="action-grid">
+                <div class="action-card">
+                    <div class="action-info">
+                        <h4>Limpeza Geral</h4>
+                        <p>Elimina todos os bots de reunião ativos.</p>
+                    </div>
+                    <button class="btn btn-danger" onclick="killBots()">KIll ALL BOTS</button>
                 </div>
-                <button class="btn btn-outline" onclick="restartService('whisperlive')">Reiniciar Whisper</button>
-                <button class="btn btn-outline" onclick="restartService('bot-manager')">Reiniciar Manager</button>
-                <button class="btn btn-danger" onclick="killBots()">Matar Todos os Bots</button>
+                <div class="action-card">
+                    <div class="action-info">
+                        <h4>Manutenção Rápida</h4>
+                        <p>Reinicia serviços principais se necessário.</p>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-outline btn-sm" onclick="restartService('bot-manager')">BOT MGMT</button>
+                        <button class="btn btn-outline btn-sm" onclick="restartService('whisperlive')">WHISPER</button>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div id="toast" class="toast">Ação concluída com sucesso</div>
+        <div id="toast">Ação executada com sucesso</div>
 
         <script>
             function showToast(msg) {
@@ -722,17 +627,22 @@ async def root():
                 try {
                     const res = await fetch('/api/admin/stats');
                     const data = await res.json();
+                    if (data.error) return;
+
+                    const cpu = data.cpu_percent.toFixed(1);
+                    const mem = data.memory.percent.toFixed(1);
+                    const disk = data.disk.percent.toFixed(1);
+
+                    document.getElementById('cpu-val').innerText = cpu + '%';
+                    document.getElementById('cpu-bar').style.width = cpu + '%';
                     
-                    document.getElementById('cpu-val').innerText = data.cpu_percent.toFixed(1) + '%';
-                    document.getElementById('cpu-bar').style.width = data.cpu_percent + '%';
+                    document.getElementById('mem-val').innerText = mem + '%';
+                    document.getElementById('mem-bar').style.width = mem + '%';
                     
-                    document.getElementById('mem-val').innerText = data.memory.percent.toFixed(1) + '%';
-                    document.getElementById('mem-bar').style.width = data.memory.percent + '%';
-                    
-                    document.getElementById('disk-val').innerText = data.disk.percent.toFixed(1) + '%';
-                    document.getElementById('disk-bar').style.width = data.disk.percent + '%';
+                    document.getElementById('disk-val').innerText = disk + '%';
+                    document.getElementById('disk-bar').style.width = disk + '%';
                 } catch (e) {
-                    console.error("Erro ao carregar stats", e);
+                    console.error("Stats fail", e);
                 }
             }
 
@@ -743,45 +653,64 @@ async def root():
                     const tbody = document.getElementById('container-body');
                     tbody.innerHTML = '';
                     
-                    if (data.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Nenhum container relevante rodando.</td></tr>';
+                    if (!data || data.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">Nenhum processo detectado.</td></tr>';
                         return;
                     }
 
                     data.forEach(c => {
                         const tr = document.createElement('tr');
+                        const statusClass = c.state === 'running' ? 'status-running' : 'status-exited';
+                        const isVexaBot = c.name.toLowerCase().includes('vexa-bot');
+                        
                         tr.innerHTML = `
-                            <td><span class="image-tag">${c.id}</span></td>
-                            <td style="font-weight: 600;">${c.name}</td>
-                            <td><span class="image-tag" style="background: rgba(59, 130, 246, 0.1); color: #60a5fa">${c.image}</span></td>
-                            <td><span style="color: ${c.state === 'running' ? 'var(--success)' : 'var(--text-muted)'}">${c.status}</span></td>
+                            <td><span class="id-badge">${c.id}</span></td>
+                            <td><div class="container-name">${c.name}</div></td>
+                            <td><div class="image-badge">${c.image}</div></td>
+                            <td><span class="status-pill ${statusClass}">${c.status}</span></td>
                             <td>
-                                ${c.name.includes('vexa-bot') ? `<button class="btn btn-danger" style="padding: 4px 10px; font-size: 11px" onclick="stopContainer('${c.id}')">STOP</button>` : '--'}
+                                ${isVexaBot ? `<button class="btn btn-danger btn-sm" onclick="stopContainer('${c.id}')">PARAR</button>` : '<span style="color:var(--text-muted)">-</span>'}
                             </td>
                         `;
                         tbody.appendChild(tr);
                     });
                 } catch (e) {
-                    console.error("Erro ao carregar containers", e);
+                    console.error("Containers fail", e);
                 }
             }
 
             async function killBots() {
-                if (!confirm("Tem certeza que deseja matar todos os bots ativos?")) return;
-                const res = await fetch('/api/admin/kill-bots', { method: 'POST' });
-                const data = await res.json();
-                showToast(`Sucesso! ${data.killed} bots terminados.`);
-                loadContainers();
+                if (!confirm("Confirmar encerramento de todos os robôs?")) return;
+                try {
+                    const res = await fetch('/api/admin/kill-bots', { method: 'POST' });
+                    const data = await res.json();
+                    showToast(`${data.killed || 0} bots removidos.`);
+                    loadContainers();
+                } catch(e) { showToast("Erro ao processar"); }
+            }
+
+            async function stopContainer(id) {
+                if (!confirm("Parar este bot?")) return;
+                try {
+                    const res = await fetch(`/api/admin/stop/${id}`, { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast("Bot interrompido");
+                        loadContainers();
+                    } else showToast(data.error || "Erro");
+                } catch(e) { showToast("Erro na requisição"); }
             }
 
             async function restartService(name) {
                 if (!confirm(`Reiniciar o serviço ${name}?`)) return;
-                const res = await fetch(`/api/admin/restart/${name}`, { method: 'POST' });
-                showToast(`Solicitação enviada para ${name}`);
+                try {
+                    await fetch(`/api/admin/restart/${name}`, { method: 'POST' });
+                    showToast(`Reinício solicitado para ${name}`);
+                } catch(e) { showToast("Erro ao solicitar"); }
             }
 
-            setInterval(updateStats, 2000);
-            setInterval(loadContainers, 5000);
+            setInterval(updateStats, 3000);
+            setInterval(loadContainers, 10000);
             updateStats();
             loadContainers();
         </script>
@@ -813,6 +742,12 @@ async def admin_restart_service(service: str):
     if not DASHBOARD_AVAILABLE:
         return {"success": False, "error": "Dashboard modules not loaded"}
     return await restart_container(service)
+
+@app.post("/api/admin/stop/{container_id}", include_in_schema=False)
+async def admin_stop_container(container_id: str):
+    if not DASHBOARD_AVAILABLE:
+        return {"success": False, "error": "Dashboard modules not loaded"}
+    return await stop_single_container(container_id)
 
 @app.post("/bots",
           response_model=MeetingResponse,

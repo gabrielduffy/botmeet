@@ -115,3 +115,12 @@ async def restart_container(container_name_substring: str) -> Dict[str, Any]:
         return {"success": True}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+async def stop_single_container(container_id: str) -> Dict[str, Any]:
+    """Para um container específico pelo ID."""
+    try:
+        if stop_bot_container(container_id):
+            return {"success": True}
+        return {"success": False, "error": "Falha ao parar container"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
