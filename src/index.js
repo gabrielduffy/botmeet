@@ -68,6 +68,39 @@ app.get('/', async (req, res) => {
   `);
 });
 
+// Tokens Management Page
+app.get('/tokens', async (req, res) => {
+  const possibleHosts = [
+    'http://127.0.0.1:8080',
+    'http://bot-manager:8080',
+    'http://sortebem_bot:8080'
+  ];
+
+  let lastError = null;
+
+  for (const host of possibleHosts) {
+    try {
+      logger.info(`[Proxy /tokens] Tentando conexão com: ${host}`);
+      const response = await axios.get(host + '/tokens', { timeout: 3000 });
+      return res.send(response.data);
+    } catch (error) {
+      lastError = error;
+      logger.warn(`[Proxy /tokens] Falha ao conectar em ${host}: ${error.message}`);
+    }
+  }
+
+  logger.error(`[Proxy /tokens] Todas as tentativas falharam. Último erro: ${lastError.message}`);
+  res.status(500).send(`
+    <body style="background:#09090b; color:#fafafa; font-family:sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0;">
+      <div style="text-align:center; padding: 20px;">
+        <h1 style="color:#ef4444;">Página de Tokens Indisponível</h1>
+        <p style="color:#a1a1aa; margin-bottom: 20px;">Não foi possível carregar a página de gerenciamento de tokens.</p>
+        <button onclick="location.reload()" style="background:#3b82f6; border:none; color:white; padding:12px 24px; border-radius:8px; cursor:pointer; font-weight:600;">Tentar Novamente</button>
+      </div>
+    </body>
+  `);
+});
+
 // Proxy para as APIs de diagnóstico e ações
 app.all('/api/admin/*', async (req, res) => {
   const targetUrl = `${BOT_MANAGER_INTERNAL_URL}${req.originalUrl}`;
