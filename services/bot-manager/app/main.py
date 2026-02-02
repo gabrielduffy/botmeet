@@ -50,6 +50,7 @@ except Exception as e:
     DASHBOARD_AVAILABLE = False
 from fastapi.responses import HTMLResponse
 from app.routes.tokens import router as tokens_router
+from app.routes.templates import router as templates_router
 
 # --- Status Transition Helper ---
 
@@ -273,6 +274,7 @@ app = FastAPI(title="Vexa Bot Manager")
 
 # Include routers
 app.include_router(tokens_router)
+app.include_router(templates_router)
 
 # Add CORS middleware
 app.add_middleware(
@@ -551,9 +553,12 @@ async def root():
                     <div class="icon"></div>
                     <h1>BOTMEET COMMAND</h1>
                 </div>
-                <div class="badge-online">
-                    <div style="width: 8px; height: 8px; background: var(--success); border-radius: 50%;"></div>
-                    INFRA OK
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <a href="/tokens" class="btn btn-outline" style="text-decoration: none;">🔑 API Tokens</a>
+                    <div class="badge-online">
+                        <div style="width: 8px; height: 8px; background: var(--success); border-radius: 50%;"></div>
+                        INFRA OK
+                    </div>
                 </div>
             </header>
 
