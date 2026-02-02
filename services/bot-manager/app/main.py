@@ -787,6 +787,23 @@ async def admin_cleanup():
         return {"success": False, "error": "Dashboard modules not loaded"}
     return await remove_exited_containers()
 
+@app.get("/tokens", response_class=HTMLResponse, include_in_schema=False)
+async def tokens_page():
+    """Serve the API tokens management page."""
+    import os
+    templates_dir = os.path.join(os.path.dirname(__file__), "templates")
+    tokens_html_path = os.path.join(templates_dir, "tokens.html")
+    
+    try:
+        with open(tokens_html_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        logger.error(f"tokens.html not found at: {tokens_html_path}")
+        return HTMLResponse(content="<h1>Tokens page not found</h1>", status_code=404)
+    except Exception as e:
+        logger.error(f"Error loading tokens page: {e}")
+        return HTMLResponse(content="<h1>Error loading tokens page</h1>", status_code=500)
+
 @app.post("/bots",
           response_model=MeetingResponse,
           status_code=status.HTTP_201_CREATED,
