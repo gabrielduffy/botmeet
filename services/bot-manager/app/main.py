@@ -38,7 +38,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import and_, desc, func
 from datetime import datetime # For start_time
-from .dashboard import get_system_stats, get_all_containers_status, kill_all_bots, restart_container
+try:
+    from .dashboard import get_system_stats, get_all_containers_status, kill_all_bots, restart_container
+    DASHBOARD_AVAILABLE = True
+except Exception as e:
+    logging.error(f"Dashboard components failed to load: {e}")
+    DASHBOARD_AVAILABLE = False
 from fastapi.responses import HTMLResponse
 
 # --- Status Transition Helper ---
@@ -787,18 +792,26 @@ async def root():
 
 @app.get("/api/admin/stats", include_in_schema=False)
 async def admin_stats():
+    if not DASHBOARD_AVAILABLE:
+        return {"error": "Dashboard modules not loaded (check psutil)"}
     return await get_system_stats()
 
 @app.get("/api/admin/containers", include_in_schema=False)
 async def admin_containers():
+    if not DASHBOARD_AVAILABLE:
+        return []
     return await get_all_containers_status()
 
 @app.post("/api/admin/kill-bots", include_in_schema=False)
 async def admin_kill_bots():
+    if not DASHBOARD_AVAILABLE:
+        return {"success": False, "error": "Dashboard modules not loaded"}
     return await kill_all_bots()
 
 @app.post("/api/admin/restart/{service}", include_in_schema=False)
 async def admin_restart_service(service: str):
+    if not DASHBOARD_AVAILABLE:
+        return {"success": False, "error": "Dashboard modules not loaded"}
     return await restart_container(service)
 
 @app.post("/bots",

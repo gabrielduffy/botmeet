@@ -40,7 +40,7 @@ echo "📡 [Vexa] Ligando Motores (Gateway & Managers)..."
 
 # Instalar dependências críticas se não estiverem no venv
 pip install -e ./libs/shared-models
-pip install "pydantic[email]" email-validator
+pip install "pydantic[email]" email-validator psutil
 
 # Variáveis para comunicação interna (Unificada)
 export ADMIN_API_URL=http://localhost:8001
