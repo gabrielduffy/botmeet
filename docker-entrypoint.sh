@@ -55,10 +55,15 @@ export PYTHONPATH=$PYTHONPATH:/app/services/bot-manager:/app/services/admin-api
 # Hack para DNS interno (api-gateway -> localhost)
 echo "127.0.0.1 api-gateway" >> /etc/hosts
 
-# Rodamos as APIs em background (usando --app-dir para evitar ModuleNotFoundError)
-nohup uvicorn app.main:app --app-dir services/admin-api --host 0.0.0.0 --port 8001 > /app/logs/admin-api.log 2>&1 &
-nohup uvicorn app.main:app --app-dir services/bot-manager --host 0.0.0.0 --port 8080 > /app/logs/bot-manager.log 2>&1 &
-nohup uvicorn services.api-gateway.main:app --host 0.0.0.0 --port 8000 > /app/logs/api-gateway.log 2>&1 &
+# Rodamos as APIs em background (Usando caminhos absolutos do venv)
+echo "🚀 Iniciando Admin API na porta 8001..."
+/opt/vexa-env/bin/python3 -m uvicorn app.main:app --app-dir /app/services/admin-api --host 0.0.0.0 --port 8001 > /app/logs/admin-api.log 2>&1 &
+
+echo "🚀 Iniciando Bot Manager na porta 8080..."
+/opt/vexa-env/bin/python3 -m uvicorn app.main:app --app-dir /app/services/bot-manager --host 0.0.0.0 --port 8080 > /app/logs/bot-manager.log 2>&1 &
+
+echo "🚀 Iniciando API Gateway na porta 8000..."
+/opt/vexa-env/bin/python3 -m uvicorn services.api-gateway.main:app --host 0.0.0.0 --port 8000 > /app/logs/api-gateway.log 2>&1 &
 
 echo "✅ [Vexa] APIs configuradas e em execução."
 
