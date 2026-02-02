@@ -34,9 +34,9 @@ const BOT_MANAGER_INTERNAL_URL = process.env.BOT_MANAGER_URL || 'http://sortebem
 app.get('/', async (req, res) => {
   // Lista de possíveis hosts internos no Easypanel
   const possibleHosts = [
-    'http://sortebem_bot:8080',
-    'http://bot:8080',
-    'http://127.0.0.1:8080'
+    'http://bot-manager:8080',
+    'http://sortebem_bot-manager:8080',
+    'http://bot:8080'
   ];
 
   let lastError = null;
