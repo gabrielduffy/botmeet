@@ -131,7 +131,17 @@ def start_bot(meet_url):
         
         if chrome_path:
             logger.info(f"Usando executável do Chrome: {chrome_path}")
-            driver = uc.Chrome(options=options, headless=False, browser_executable_path=chrome_path)
+            # Tentar detectar versão do Chrome
+            try:
+                import subprocess
+                # chrome --version -> "Google Chrome 144.0.7559.109"
+                ver_str = subprocess.check_output([chrome_path, "--version"]).decode().strip()
+                main_ver = int(ver_str.split()[-1].split('.')[0])
+                logger.info(f"Versão detectada do Chrome: {main_ver}")
+                driver = uc.Chrome(options=options, headless=False, browser_executable_path=chrome_path, version_main=main_ver)
+            except Exception as e:
+                logger.warning(f"Não conseguiu detectar versão do Chrome ({e}), tentando sem version_main...")
+                driver = uc.Chrome(options=options, headless=False, browser_executable_path=chrome_path)
         else:
             logger.info("Chrome path não encontrado explicitamente. Deixando undetected_chromedriver tentar autodetectar...")
             driver = uc.Chrome(options=options, headless=False)
