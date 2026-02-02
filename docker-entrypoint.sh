@@ -18,6 +18,23 @@ sleep 2
 pulseaudio -D --exit-idle-time=-1
 sleep 1
 
+# --- MODO WORKER ---
+# Se MEETING_URL for passada, somos um worker dedicado
+if [ ! -z "$MEETING_URL" ]; then
+    echo "🎥 [Worker] Modo Worker Detectado!"
+    echo "🎥 [Worker] Target: $MEETING_URL"
+    
+    # Limpar locks antigos do Xvfb se existirem (worker efêmero)
+    rm -f /tmp/.X99-lock
+    
+    # Instalar dependências se necessário (rápido)
+    pip install "pydantic[email]" email-validator > /dev/null 2>&1
+    
+    echo "🎥 [Worker] Running recorder.py..."
+    exec python3 src/services/recorder.py "$MEETING_URL"
+fi
+# -------------------
+
 # 3. Iniciar Microserviços Vexa (Via Python)
 echo "📡 [Vexa] Ligando Motores (Gateway & Managers)..."
 

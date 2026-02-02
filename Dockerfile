@@ -29,7 +29,9 @@ RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key
     && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list \
     && apt-get update \
     && apt-get install -y google-chrome-stable --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /opt/google/chrome/chrome /usr/bin/google-chrome \
+    && ln -sf /opt/google/chrome/chrome /usr/bin/chrome
 
 # Configurar o ambiente do robô Vexa (Python)
 RUN python3 -m venv /opt/vexa-env && \

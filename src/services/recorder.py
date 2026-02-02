@@ -105,7 +105,7 @@ def start_bot(meet_url):
     options.add_argument('--use-fake-ui-for-media-stream')
     options.add_argument('--use-fake-device-for-media-stream')
     options.add_argument('--window-size=1280,720')
-    options.binary_location = '/usr/bin/chromium' # Garantir que o Chrome do Docker seja usado
+    # options.binary_location = '/usr/bin/chromium' # Removido para usar autodeteccao ou browser_executable_path
     
     # Proxy
     proxy_plugin = create_proxy_extension()
@@ -114,7 +114,27 @@ def start_bot(meet_url):
     driver = None
     try:
         logger.info("Lançando Chrome indetectável...")
-        driver = uc.Chrome(options=options, headless=False)
+        # Tenta encontrar o Chrome em locais comuns se nao estiver no PATH ou em /usr/bin/google-chrome
+        chrome_path = None
+        possible_paths = [
+            "/opt/google/chrome/chrome",
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/chromium",
+            "/usr/bin/chromium-browser"
+        ]
+        
+        for p in possible_paths:
+            if os.path.exists(p):
+                chrome_path = p
+                break
+        
+        if chrome_path:
+            logger.info(f"Usando executável do Chrome: {chrome_path}")
+            driver = uc.Chrome(options=options, headless=False, browser_executable_path=chrome_path)
+        else:
+            logger.info("Chrome path não encontrado explicitamente. Deixando undetected_chromedriver tentar autodetectar...")
+            driver = uc.Chrome(options=options, headless=False)
         
         # 1. Login
         if login_google(driver):
@@ -186,9 +206,13 @@ def start_bot(meet_url):
             os.remove(proxy_plugin)
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        logger.error("Uso: python recorder.py <MEET_URL>")
+    target_url = None
+    if len(sys.argv) >= 2:
+        target_url = sys.argv[1]
+    else:
+        target_url = os.environ.get('MEETING_URL')
+        
+    if not target_url:
+        logger.error("Uso: python recorder.py <MEET_URL> ou defina env MEETING_URL")
         sys.exit(1)
-    
-    target_url = sys.argv[1]
     start_bot(target_url)
