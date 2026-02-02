@@ -49,6 +49,7 @@ except Exception as e:
     logging.error(f"Dashboard components failed to load: {e}")
     DASHBOARD_AVAILABLE = False
 from fastapi.responses import HTMLResponse
+from app.routes.tokens import router as tokens_router
 
 # --- Status Transition Helper ---
 
@@ -269,6 +270,9 @@ logger = logging.getLogger("bot_manager")
 
 # Initialize the FastAPI app
 app = FastAPI(title="Vexa Bot Manager")
+
+# Include routers
+app.include_router(tokens_router)
 
 # Add CORS middleware
 app.add_middleware(
