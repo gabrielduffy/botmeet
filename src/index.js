@@ -32,23 +32,40 @@ const BOT_MANAGER_INTERNAL_URL = process.env.BOT_MANAGER_URL || 'http://sortebem
 
 // Dashboard Principal
 app.get('/', async (req, res) => {
-  try {
-    const response = await axios.get(BOT_MANAGER_INTERNAL_URL + '/', {
-      timeout: 5000
-    });
-    res.send(response.data);
-  } catch (error) {
-    logger.error(`[Proxy] Erro ao carregar Dashboard: ${error.message}`);
-    res.status(500).send(`
-      <body style="background:#09090b; color:#fafafa; font-family:sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0;">
-        <div style="text-align:center;">
-          <h1 style="color:#ef4444;">Sistema Offline</h1>
-          <p style="color:#a1a1aa;">O Bot Manager não respondeu. Tente reiniciar os serviços.</p>
-          <button onclick="location.reload()" style="background:#3b82f6; border:none; color:white; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:600;">Tentar Novamente</button>
-        </div>
-      </body>
-    `);
+  // Lista de possíveis hosts internos no Easypanel
+  const possibleHosts = [
+    'http://sortebem_bot:8080',
+    'http://bot:8080',
+    'http://127.0.0.1:8080'
+  ];
+
+  let lastError = null;
+
+  for (const host of possibleHosts) {
+    try {
+      logger.info(`[Proxy] Tentando conexão com: ${host}`);
+      const response = await axios.get(host + '/', { timeout: 3000 });
+      return res.send(response.data);
+    } catch (error) {
+      lastError = error;
+      logger.warn(`[Proxy] Falha ao conectar em ${host}: ${error.message}`);
+    }
   }
+
+  logger.error(`[Proxy] Todas as tentativas de conexão falharam. Último erro: ${lastError.message}`);
+  res.status(500).send(`
+    <body style="background:#09090b; color:#fafafa; font-family:sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0;">
+      <div style="text-align:center; padding: 20px;">
+        <h1 style="color:#ef4444;">Sistema em Deploy ou Offline</h1>
+        <p style="color:#a1a1aa; margin-bottom: 20px;">O Bot Manager (sortebem_bot) não foi encontrado na rede interna.</p>
+        <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:8px; font-family:monospace; font-size:12px; margin-bottom:20px; text-align:left;">
+          Erro Técnico: ${lastError.message}<br>
+          Target: sortebem_bot:8080
+        </div>
+        <button onclick="location.reload()" style="background:#3b82f6; border:none; color:white; padding:12px 24px; border-radius:8px; cursor:pointer; font-weight:600;">Verificar Novamente</button>
+      </div>
+    </body>
+  `);
 });
 
 // Proxy para as APIs de diagnóstico e ações
