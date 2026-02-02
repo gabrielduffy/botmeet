@@ -15,7 +15,7 @@ class DockerClient:
         self.client = docker.from_env()
         
         # Bot container configuration
-        self.bot_image = os.getenv("BOT_IMAGE", "bot:latest")
+        self.bot_image = os.getenv("BOT_IMAGE", "easypanel/sortebem/bot:latest")
         self.transcription_service = os.getenv("TRANSCRIPTION_SERVICE", "http://transcription-service:8080")
         self.network_name = os.getenv("DOCKER_NETWORK", "vexa_default")
     
