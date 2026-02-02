@@ -37,13 +37,12 @@ class Transcriber {
   }
 
   /**
-   * Transcreve arquivo de áudio
+   * Transcreve arquivo de áudio usando Groq API
    * @param {string} audioPath - Caminho do arquivo de áudio
    * @returns {string} Texto transcrito
    */
   async transcribe(audioPath) {
-    logger.info(`[Transcriber] Iniciando transcrição: ${audioPath}`);
-    logger.info(`[Transcriber] Modelo: ${this.model}, Idioma: ${this.language}`);
+    logger.info(`[Transcriber] Iniciando transcrição com Groq API: ${audioPath}`);
 
     // Verificar se arquivo existe
     if (!fs.existsSync(audioPath)) {
@@ -59,92 +58,25 @@ class Transcriber {
       throw new Error('Arquivo de áudio muito pequeno ou vazio');
     }
 
-    const outputDir = this.transcriptionsDir;
-    const baseName = path.basename(audioPath, path.extname(audioPath));
+    // Groq tem limite de 25MB
+    if (sizeMB > 25) {
+      throw new Error('Arquivo de áudio muito grande para Groq API (máximo 25MB)');
+    }
 
-    return new Promise((resolve, reject) => {
-      const startTime = Date.now();
+    try {
+      const transcript = await this.transcribeWithGroq(audioPath);
 
-      const whisper = spawn(this.whisperPath, [
-        audioPath,
-        '--model', this.model,
-        '--language', this.language,
-        '--output_dir', outputDir,
-        '--output_format', 'txt',
-        '--task', 'transcribe',
-        // Opções adicionais para melhor qualidade
-        '--condition_on_previous_text', 'False',
-        '--fp16', 'False', // Desabilitar para CPUs
-      ]);
+      // Limpar arquivo de áudio após transcrição
+      if (fs.existsSync(audioPath)) {
+        fs.unlinkSync(audioPath);
+        logger.info(`[Transcriber] Removido: ${audioPath}`);
+      }
 
-      let stderr = '';
-
-      whisper.stdout.on('data', (data) => {
-        logger.info(`[Whisper] ${data.toString().trim()}`);
-      });
-
-      whisper.stderr.on('data', (data) => {
-        const message = data.toString();
-        stderr += message;
-
-        // Whisper envia progresso no stderr
-        if (message.includes('%')) {
-          const match = message.match(/(\d+)%/);
-          if (match) {
-            logger.info(`[Whisper] Progresso: ${match[1]}%`);
-          }
-        }
-      });
-
-      whisper.on('close', (code) => {
-        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-
-        if (code !== 0) {
-          logger.error(`[Transcriber] Whisper falhou com código ${code}`);
-          logger.error(`[Transcriber] Stderr: ${stderr}`);
-          reject(new Error(`Whisper falhou: ${stderr}`));
-          return;
-        }
-
-        // Ler arquivo de transcrição gerado
-        const transcriptPath = path.join(outputDir, `${baseName}.txt`);
-
-        if (!fs.existsSync(transcriptPath)) {
-          // Tentar com nome alternativo
-          const files = fs.readdirSync(outputDir);
-          const txtFile = files.find(f => f.startsWith(baseName) && f.endsWith('.txt'));
-
-          if (!txtFile) {
-            reject(new Error('Arquivo de transcrição não foi gerado'));
-            return;
-          }
-
-          const altPath = path.join(outputDir, txtFile);
-          const transcript = fs.readFileSync(altPath, 'utf-8').trim();
-
-          logger.info(`[Transcriber] ✅ Concluído em ${duration}s`);
-          logger.info(`[Transcriber] Caracteres: ${transcript.length}`);
-
-          resolve(transcript);
-          return;
-        }
-
-        const transcript = fs.readFileSync(transcriptPath, 'utf-8').trim();
-
-        logger.info(`[Transcriber] ✅ Concluído em ${duration}s`);
-        logger.info(`[Transcriber] Caracteres: ${transcript.length}`);
-
-        // Limpar arquivos temporários
-        this.cleanupFiles(audioPath, outputDir, baseName);
-
-        resolve(transcript);
-      });
-
-      whisper.on('error', (error) => {
-        logger.error(`[Transcriber] Erro ao executar Whisper: ${error.message}`);
-        reject(error);
-      });
-    });
+      return transcript;
+    } catch (error) {
+      logger.error(`[Transcriber] Erro na transcrição: ${error.message}`);
+      throw error;
+    }
   }
 
   /**
