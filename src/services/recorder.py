@@ -194,26 +194,105 @@ def start_bot(meet_url):
 
         if not clicked:
             logger.error("Não foi possível encontrar o botão de entrada após 10 tentativas.")
-            # Screenshot para debug futuro (se implementado)
+            logger.info("Verificando se já estamos na reunião (sem botão)...")
             
-        logger.info("Bot dentro da reunião. Mantendo vivo...")
-        
+            # Verificação alternativa de sucesso (botão de sair, microfone, ou URL da sala)
+            try:
+                # Se a URL ainda for a da reunião (sem 'landing' ou 'error') e tiver botões de controle
+                if "meet.google.com" in driver.current_url:
+                    parts = driver.current_url.split('/')
+                    # URLs de meet validas geralmente tem código ex: meet.google.com/abc-defg-hij
+                    if len(parts) > 3 and len(parts[-1]) > 5:
+                        logger.info("URL parece correta. Verificando controles de mídia...")
+                        # Botão de sair (telefone vermelho) ou microfone
+                        controls = driver.find_elements(By.CSS_SELECTOR, "button[aria-label*='Sair'], button[aria-label*='Leave']")
+                        if controls:
+                            logger.info("Controles de reunião detectados! Estamos dentro!")
+                            clicked = True
+            except:
+                pass
+
+        if clicked or "meet.google.com" in driver.current_url:
+            logger.info("Bot confirmado na reunião. Iniciando captura de áudio...")
+            
+            # Start Whisper Client in a separate thread
+            whisper_url = os.environ.get("WHISPER_LIVE_URL")
+            if whisper_url and "ws" in whisper_url:
+                try:
+                    from whisper_live.client import TranscriptionClient
+                    
+                    # Parse WebSocket URL ws://host:port/ws
+                    # Ex: ws://172.18.0.5:9090/ws
+                    host_part = whisper_url.replace("ws://", "").replace("wss://", "").split("/")[0]
+                    if ":" in host_part:
+                        host, port = host_part.split(":")
+                        port = int(port)
+                    else:
+                        host = host_part
+                        port = 9090
+                        
+                    logger.info(f"Conectando ao Whisper em {host}:{port}...")
+                    
+                    def run_whisper():
+                        try:
+                            client = TranscriptionClient(
+                                host=host, 
+                                port=port, 
+                                lang="pt",
+                                use_vad=True,
+                                log_transcription=True,
+                                meeting_url=meet_url,
+                                token="bot-token" # Pode vir do env
+                            )
+                            client()
+                        except Exception as e:
+                            logger.error(f"Erro no Client Whisper: {e}")
+
+                    import threading
+                    t = threading.Thread(target=run_whisper)
+                    t.daemon = True
+                    t.start()
+                    logger.info("Thread de áudio iniciada.")
+                    
+                except ImportError:
+                    logger.error("Biblioteca whisper_live não encontrada! O áudio não será transcrito.")
+                except Exception as e:
+                    logger.error(f"Erro ao iniciar Whisper Client: {e}")
+            else:
+                logger.warning("WHISPER_LIVE_URL não definido ou inválido. Áudio não será gravado.")
+                
+        else:
+             logger.error("Falha crítica: Bot não conseguiu entrar na reunião.")
+             return
+
         # Loop de monitoramento
         while True:
             time.sleep(30)
             if "meet.google.com" not in driver.current_url:
                 logger.info("URL mudou. Reunião parece ter acabado.")
                 break
-            # Aqui poderíamos checar se estamos sozinhos na sala, etc.
-
+            
+            # Opcional: Verificar se fomos expulsos
+            try:
+                removed = driver.find_elements(By.XPATH, "//*[contains(text(), 'removed')]")
+                if removed:
+                    logger.info("Detectado aviso de remoção. Encerrando.")
+                    break
+            except:
+                pass
+            
     except Exception as e:
         logger.error(f"ERRO FATAL NO PYTHON: {e}", exc_info=True)
     finally:
         if driver:
             logger.info("Fechando driver...")
-            driver.quit()
+            try:
+                driver.quit()
+            except: pass
         if os.path.exists(proxy_plugin):
-            os.remove(proxy_plugin)
+            try:
+                os.remove(proxy_plugin)
+            except: pass
 
 if __name__ == "__main__":
     target_url = None

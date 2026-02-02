@@ -28,3 +28,4 @@ requests
 httpx
 psycopg2-binary
 aiodocker 
+psutil

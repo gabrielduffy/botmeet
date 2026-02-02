@@ -38,6 +38,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import and_, desc, func
 from datetime import datetime # For start_time
+from .dashboard import get_system_stats, get_all_containers_status, kill_all_bots, restart_container
+from fastapi.responses import HTMLResponse
 
 # --- Status Transition Helper ---
 
@@ -420,9 +422,381 @@ async def _delayed_container_stop(container_id: str, meeting_id: int, delay_seco
         logger.error(f"[Delayed Stop] Error during safety finalizer for meeting {meeting_id}: {e}", exc_info=True)
 # --- ------------------------ ---
 
-@app.get("/", include_in_schema=False)
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def root():
-    return {"message": "Vexa Bot Manager is running"}
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="pt-br">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>BotMeet | Command Center</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+        <style>
+            :root {
+                --bg: #09090b;
+                --card-bg: rgba(24, 24, 27, 0.8);
+                --border: rgba(39, 39, 42, 0.5);
+                --accent: #3b82f6;
+                --danger: #ef4444;
+                --success: #22c55e;
+                --text: #fafafa;
+                --text-muted: #a1a1aa;
+            }
+
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+
+            body {
+                background: var(--bg);
+                color: var(--text);
+                font-family: 'Inter', sans-serif;
+                overflow-x: hidden;
+                min-height: 100vh;
+            }
+
+            .container {
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 40px 20px;
+            }
+
+            header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 40px;
+            }
+
+            .logo {
+                font-size: 24px;
+                font-weight: 700;
+                letter-spacing: -1px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+
+            .logo .dot {
+                width: 8px;
+                height: 8px;
+                background: var(--accent);
+                border-radius: 50%;
+                box-shadow: 0 0 15px var(--accent);
+            }
+
+            .status-badge {
+                padding: 6px 14px;
+                border-radius: 20px;
+                background: rgba(34, 197, 94, 0.1);
+                color: var(--success);
+                font-size: 13px;
+                font-weight: 600;
+                border: 1px solid rgba(34, 197, 94, 0.2);
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 20px;
+                margin-bottom: 40px;
+            }
+
+            .card {
+                background: var(--card-bg);
+                backdrop-filter: blur(12px);
+                border: 1px solid var(--border);
+                border-radius: 16px;
+                padding: 24px;
+                transition: transform 0.2s, border-color 0.2s;
+            }
+
+            .card:hover {
+                border-color: var(--accent);
+            }
+
+            .card-title {
+                font-size: 14px;
+                font-weight: 600;
+                color: var(--text-muted);
+                margin-bottom: 16px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
+            .stats-value {
+                font-size: 32px;
+                font-weight: 700;
+                font-family: 'JetBrains Mono', monospace;
+            }
+
+            .progress-bar {
+                width: 100%;
+                height: 6px;
+                background: rgba(255,255,255,0.05);
+                border-radius: 3px;
+                margin-top: 12px;
+                overflow: hidden;
+            }
+
+            .progress-inner {
+                height: 100%;
+                background: var(--accent);
+                transition: width 1s ease-in-out;
+            }
+
+            .bots-list {
+                margin-top: 40px;
+            }
+
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 20px;
+            }
+
+            th {
+                text-align: left;
+                padding: 12px;
+                color: var(--text-muted);
+                font-size: 13px;
+                border-bottom: 1px solid var(--border);
+            }
+
+            td {
+                padding: 16px 12px;
+                border-bottom: 1px solid var(--border);
+                font-size: 14px;
+            }
+
+            .image-tag {
+                font-family: 'JetBrains Mono', monospace;
+                font-size: 12px;
+                background: rgba(255,255,255,0.05);
+                padding: 4px 8px;
+                border-radius: 4px;
+            }
+
+            .btn {
+                padding: 10px 20px;
+                border-radius: 8px;
+                font-weight: 600;
+                cursor: pointer;
+                border: none;
+                transition: all 0.2s;
+                font-size: 13px;
+            }
+
+            .btn-danger {
+                background: var(--danger);
+                color: white;
+            }
+
+            .btn-danger:hover {
+                opacity: 0.8;
+                box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+            }
+
+            .btn-outline {
+                background: transparent;
+                border: 1px solid var(--border);
+                color: var(--text);
+            }
+
+            .btn-outline:hover {
+                background: var(--border);
+            }
+
+            .action-hub {
+                display: flex;
+                gap: 15px;
+                margin-top: 40px;
+                background: rgba(255,255,255,0.02);
+                padding: 24px;
+                border-radius: 16px;
+                border: 1px dashed var(--border);
+            }
+
+            .toast {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                padding: 12px 24px;
+                background: var(--accent);
+                border-radius: 8px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                transform: translateY(100px);
+                transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                z-index: 1000;
+            }
+
+            .toast.show { transform: translateY(0); }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <div class="logo">
+                    <div class="dot"></div>
+                    BOTMEET COMMAND
+                </div>
+                <div class="status-badge">
+                    <div style="width: 8px; height: 8px; background: var(--success); border-radius: 50%;"></div>
+                    API ONLINE
+                </div>
+            </header>
+
+            <div class="grid">
+                <div class="card">
+                    <div class="card-title">Processamento CPU</div>
+                    <div class="stats-value" id="cpu-val">--%</div>
+                    <div class="progress-bar"><div class="progress-inner" id="cpu-bar" style="width: 0%"></div></div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Memória RAM</div>
+                    <div class="stats-value" id="mem-val">--%</div>
+                    <div class="progress-bar"><div class="progress-inner" id="mem-bar" style="width: 0%"></div></div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Uso de Disco</div>
+                    <div class="stats-value" id="disk-val">--%</div>
+                    <div class="progress-bar"><div class="progress-inner" id="disk-bar" style="width: 0%"></div></div>
+                </div>
+            </div>
+
+            <div class="bots-list">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2 style="font-size: 20px; font-weight: 700;">Recursos em Operação</h2>
+                    <button class="btn btn-outline" onclick="loadContainers()">Recarregar Lista</button>
+                </div>
+                <div class="card" style="margin-top: 20px; padding: 0; overflow: hidden;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>NOME DO CONTAINER</th>
+                                <th>IMAGEM</th>
+                                <th>STATUS</th>
+                                <th>AÇÕES</th>
+                            </tr>
+                        </thead>
+                        <tbody id="container-body">
+                            <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Carregando containers...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="action-hub">
+                <div style="flex: 1">
+                    <h3 style="font-size: 16px; margin-bottom: 4px;">Controles Críticos</h3>
+                    <p style="font-size: 13px; color: var(--text-muted);">Ações de emergência para estabilização imediata do sistema.</p>
+                </div>
+                <button class="btn btn-outline" onclick="restartService('whisperlive')">Reiniciar Whisper</button>
+                <button class="btn btn-outline" onclick="restartService('bot-manager')">Reiniciar Manager</button>
+                <button class="btn btn-danger" onclick="killBots()">Matar Todos os Bots</button>
+            </div>
+        </div>
+
+        <div id="toast" class="toast">Ação concluída com sucesso</div>
+
+        <script>
+            function showToast(msg) {
+                const t = document.getElementById('toast');
+                t.innerText = msg;
+                t.classList.add('show');
+                setTimeout(() => t.classList.remove('show'), 3000);
+            }
+
+            async function updateStats() {
+                try {
+                    const res = await fetch('/api/admin/stats');
+                    const data = await res.json();
+                    
+                    document.getElementById('cpu-val').innerText = data.cpu_percent.toFixed(1) + '%';
+                    document.getElementById('cpu-bar').style.width = data.cpu_percent + '%';
+                    
+                    document.getElementById('mem-val').innerText = data.memory.percent.toFixed(1) + '%';
+                    document.getElementById('mem-bar').style.width = data.memory.percent + '%';
+                    
+                    document.getElementById('disk-val').innerText = data.disk.percent.toFixed(1) + '%';
+                    document.getElementById('disk-bar').style.width = data.disk.percent + '%';
+                } catch (e) {
+                    console.error("Erro ao carregar stats", e);
+                }
+            }
+
+            async function loadContainers() {
+                try {
+                    const res = await fetch('/api/admin/containers');
+                    const data = await res.json();
+                    const tbody = document.getElementById('container-body');
+                    tbody.innerHTML = '';
+                    
+                    if (data.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Nenhum container relevante rodando.</td></tr>';
+                        return;
+                    }
+
+                    data.forEach(c => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td><span class="image-tag">${c.id}</span></td>
+                            <td style="font-weight: 600;">${c.name}</td>
+                            <td><span class="image-tag" style="background: rgba(59, 130, 246, 0.1); color: #60a5fa">${c.image}</span></td>
+                            <td><span style="color: ${c.state === 'running' ? 'var(--success)' : 'var(--text-muted)'}">${c.status}</span></td>
+                            <td>
+                                ${c.name.includes('vexa-bot') ? `<button class="btn btn-danger" style="padding: 4px 10px; font-size: 11px" onclick="stopContainer('${c.id}')">STOP</button>` : '--'}
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                } catch (e) {
+                    console.error("Erro ao carregar containers", e);
+                }
+            }
+
+            async function killBots() {
+                if (!confirm("Tem certeza que deseja matar todos os bots ativos?")) return;
+                const res = await fetch('/api/admin/kill-bots', { method: 'POST' });
+                const data = await res.json();
+                showToast(`Sucesso! ${data.killed} bots terminados.`);
+                loadContainers();
+            }
+
+            async function restartService(name) {
+                if (!confirm(`Reiniciar o serviço ${name}?`)) return;
+                const res = await fetch(`/api/admin/restart/${name}`, { method: 'POST' });
+                showToast(`Solicitação enviada para ${name}`);
+            }
+
+            setInterval(updateStats, 2000);
+            setInterval(loadContainers, 5000);
+            updateStats();
+            loadContainers();
+        </script>
+    </body>
+    </html>
+    """
+    return html_content
+
+@app.get("/api/admin/stats", include_in_schema=False)
+async def admin_stats():
+    return await get_system_stats()
+
+@app.get("/api/admin/containers", include_in_schema=False)
+async def admin_containers():
+    return await get_all_containers_status()
+
+@app.post("/api/admin/kill-bots", include_in_schema=False)
+async def admin_kill_bots():
+    return await kill_all_bots()
+
+@app.post("/api/admin/restart/{service}", include_in_schema=False)
+async def admin_restart_service(service: str):
+    return await restart_container(service)
 
 @app.post("/bots",
           response_model=MeetingResponse,
