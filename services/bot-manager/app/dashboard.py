@@ -124,3 +124,29 @@ async def stop_single_container(container_id: str) -> Dict[str, Any]:
         return {"success": False, "error": "Falha ao parar container"}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+async def remove_exited_containers() -> Dict[str, Any]:
+    """Remove todos os containers que não estão rodando."""
+    session = get_socket_session()
+    if not session: return {"success": False}
+    
+    socket_path_relative = DOCKER_HOST.split('//', 1)[1]
+    socket_path_abs = f"/{socket_path_relative}"
+    socket_path_encoded = socket_path_abs.replace("/", "%2F")
+    socket_url_base = f'http+unix://{socket_path_encoded}'
+    
+    try:
+        # Pega containers parados
+        response = session.get(f'{socket_url_base}/containers/json?all=true&filters={{"status":["exited","dead","created"]}}')
+        containers = response.json()
+        
+        removed = 0
+        for c in containers:
+            name = c.get('Names', [''])[0].lstrip('/')
+            # Apenas remove se for do projeto (bot ou vexa)
+            if any(term in name.lower() for term in ['bot', 'vexa']):
+                session.delete(f"{socket_url_base}/containers/{c['Id']}?force=true")
+                removed += 1
+        return {"success": True, "removed": removed}
+    except Exception as e:
+        return {"success": False, "error": str(e)}

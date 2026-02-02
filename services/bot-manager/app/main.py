@@ -41,7 +41,8 @@ from datetime import datetime # For start_time
 try:
     from .dashboard import (
         get_system_stats, get_all_containers_status, 
-        kill_all_bots, restart_container, stop_single_container
+        kill_all_bots, restart_container, stop_single_container,
+        remove_exited_containers
     )
     DASHBOARD_AVAILABLE = True
 except Exception as e:
@@ -572,7 +573,10 @@ async def root():
 
             <div class="section-header">
                 <h2>Recursos em Operação</h2>
-                <button class="btn btn-outline" onclick="loadContainers()">Recarregar</button>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-outline" onclick="cleanupExited()" style="color:var(--warning); border-color:var(--warning);">Limpar Parados</button>
+                    <button class="btn btn-outline" onclick="loadContainers()">Recarregar</button>
+                </div>
             </div>
 
             <div class="table-container">
@@ -659,17 +663,27 @@ async def root():
                     }
 
                     data.forEach(c => {
+                        // Esconde infra básica (DBs/Redis) se não for solicitado
+                        const isMainService = ['bot-manager', 'whisper', 'vexa-bot', 'admin-api', 'api-gateway', 'sortebem'].some(term => c.name.toLowerCase().includes(term));
+                        if (!isMainService && !c.name.includes('vexa-bot')) return;
+
                         const tr = document.createElement('tr');
                         const statusClass = c.state === 'running' ? 'status-running' : 'status-exited';
                         const isVexaBot = c.name.toLowerCase().includes('vexa-bot');
                         
+                        // Encurta o nome do container para o Easypanel
+                        let displayName = c.name;
+                        if (displayName.length > 30) {
+                            displayName = displayName.split('.')[0] + '...' + displayName.slice(-8);
+                        }
+
                         tr.innerHTML = `
                             <td><span class="id-badge">${c.id}</span></td>
-                            <td><div class="container-name">${c.name}</div></td>
-                            <td><div class="image-badge">${c.image}</div></td>
+                            <td><div class="container-name" title="${c.name}">${displayName}</div></td>
+                            <td><div class="image-badge">${c.image.split(':')[0]}</div></td>
                             <td><span class="status-pill ${statusClass}">${c.status}</span></td>
                             <td>
-                                ${isVexaBot ? `<button class="btn btn-danger btn-sm" onclick="stopContainer('${c.id}')">PARAR</button>` : '<span style="color:var(--text-muted)">-</span>'}
+                                ${isVexaBot && c.state === 'running' ? `<button class="btn btn-danger btn-sm" onclick="stopContainer('${c.id}')">PARAR</button>` : '<span style="color:var(--text-muted)">-</span>'}
                             </td>
                         `;
                         tbody.appendChild(tr);
@@ -687,6 +701,15 @@ async def root():
                     showToast(`${data.killed || 0} bots removidos.`);
                     loadContainers();
                 } catch(e) { showToast("Erro ao processar"); }
+            }
+
+            async function cleanupExited() {
+                try {
+                    const res = await fetch('/api/admin/cleanup', { method: 'POST' });
+                    const data = await res.json();
+                    showToast(`${data.removed || 0} containers mortos removidos.`);
+                    loadContainers();
+                } catch(e) { showToast("Erro ao limpar"); }
             }
 
             async function stopContainer(id) {
@@ -748,6 +771,12 @@ async def admin_stop_container(container_id: str):
     if not DASHBOARD_AVAILABLE:
         return {"success": False, "error": "Dashboard modules not loaded"}
     return await stop_single_container(container_id)
+
+@app.post("/api/admin/cleanup", include_in_schema=False)
+async def admin_cleanup():
+    if not DASHBOARD_AVAILABLE:
+        return {"success": False, "error": "Dashboard modules not loaded"}
+    return await remove_exited_containers()
 
 @app.post("/bots",
           response_model=MeetingResponse,
