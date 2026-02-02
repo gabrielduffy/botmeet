@@ -32,11 +32,11 @@ const BOT_MANAGER_INTERNAL_URL = process.env.BOT_MANAGER_URL || 'http://sortebem
 
 // Dashboard Principal
 app.get('/', async (req, res) => {
-  // Lista de possíveis hosts internos no Easypanel
+  // No modo unificado do docker-entrypoint.sh, a API roda no mesmo container
   const possibleHosts = [
+    'http://127.0.0.1:8080',
     'http://bot-manager:8080',
-    'http://sortebem_bot:8080',
-    'http://bot:8080'
+    'http://sortebem_bot:8080'
   ];
 
   let lastError = null;
