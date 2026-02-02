@@ -317,8 +317,11 @@ async def startup_event():
     try:
         logger.info(f"Connecting to Redis at {REDIS_URL}...")
         redis_client = await aioredis.from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
-        await redis_client.ping() # Verify connection
+        # Add timeout to prevent hanging on startup if Redis is slow/down
+        await asyncio.wait_for(redis_client.ping(), timeout=2.0) 
         logger.info("Successfully connected to Redis.")
+    except asyncio.TimeoutError:
+        logger.warning("Redis connection timed out during startup. Continuing without Redis PubSub.")
     except Exception as e:
         logger.error(f"Failed to connect to Redis on startup: {e}", exc_info=True)
         redis_client = None # Ensure client is None if connection fails

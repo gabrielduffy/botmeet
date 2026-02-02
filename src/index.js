@@ -35,7 +35,7 @@ app.get('/', async (req, res) => {
   // Lista de possíveis hosts internos no Easypanel
   const possibleHosts = [
     'http://bot-manager:8080',
-    'http://sortebem_bot-manager:8080',
+    'http://sortebem_bot:8080',
     'http://bot:8080'
   ];
 
