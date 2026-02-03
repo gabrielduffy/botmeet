@@ -796,11 +796,9 @@ async def tokens_page():
 @app.post("/bots",
           response_model=MeetingResponse,
           status_code=status.HTTP_201_CREATED,
-          summary="Request a new bot instance to join a meeting",
-          dependencies=[Depends(get_user_and_token)]) # MODIFIED
+          summary="Request a new bot instance to join a meeting")
 async def request_bot(
     req: MeetingCreate,
-    auth_data: tuple[str, User] = Depends(get_user_and_token), # MODIFIED
     db: AsyncSession = Depends(get_db)
 ):
     """Handles requests to launch a new bot container for a meeting.
@@ -811,9 +809,20 @@ async def request_bot(
     - Updates the Meeting record with container details and status.
     - Returns the created Meeting details.
     """
-    user_token, current_user = auth_data
+    # Get default user since auth is removed
+    result = await db.execute(select(User).order_by(User.id))
+    current_user = result.scalars().first()
+    
+    if not current_user:
+        # Fallback if no users exist
+        current_user = User(email="default@benemax.com.br", name="Default User")
+        db.add(current_user)
+        await db.commit()
+        await db.refresh(current_user)
+    
+    user_token = "vexa_default_token" # Mock token for internal logic
 
-    logger.info(f"Received bot request for platform '{req.platform.value}' with native ID '{req.native_meeting_id}' from user {current_user.id}")
+    logger.info(f"Received bot request for platform '{req.platform.value}' with native ID '{req.native_meeting_id}'")
     native_meeting_id = req.native_meeting_id
 
     constructed_url = Platform.construct_meeting_url(req.platform.value, native_meeting_id, req.passcode)
