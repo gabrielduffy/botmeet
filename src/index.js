@@ -101,8 +101,8 @@ app.get('/tokens', async (req, res) => {
   `);
 });
 
-// Proxy para as APIs de diagnóstico e ações (Admin e Tokens)
-app.all(['/api/admin/*', '/api/tokens/*'], async (req, res) => {
+// Proxy para as APIs de diagnóstico e ações (Admin, Tokens e Lançamento)
+app.all(['/api/admin/*', '/api/tokens/*', '/bots'], async (req, res) => {
   const targetUrl = `${BOT_MANAGER_INTERNAL_URL}${req.originalUrl}`;
   try {
     const response = await axios({
