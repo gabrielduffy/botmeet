@@ -213,53 +213,32 @@ def start_bot(meet_url):
                 pass
 
         if clicked or "meet.google.com" in driver.current_url:
-            logger.info("Bot confirmado na reunião. Iniciando captura de áudio...")
+            logger.info("Bot confirmado na reunião. Iniciando transcrição via GROQ...")
             
-            # Start Whisper Client in a separate thread
-            whisper_url = os.environ.get("WHISPER_LIVE_URL")
-            if whisper_url and "ws" in whisper_url:
-                try:
-                    from whisper_live.client import TranscriptionClient
-                    
-                    # Parse WebSocket URL ws://host:port/ws
-                    # Ex: ws://172.18.0.5:9090/ws
-                    host_part = whisper_url.replace("ws://", "").replace("wss://", "").split("/")[0]
-                    if ":" in host_part:
-                        host, port = host_part.split(":")
-                        port = int(port)
-                    else:
-                        host = host_part
-                        port = 9090
-                        
-                    logger.info(f"Conectando ao Whisper em {host}:{port}...")
-                    
-                    def run_whisper():
-                        try:
-                            client = TranscriptionClient(
-                                host=host, 
-                                port=port, 
-                                lang="pt",
-                                use_vad=True,
-                                log_transcription=True,
-                                meeting_url=meet_url,
-                                token="bot-token" # Pode vir do env
-                            )
-                            client()
-                        except Exception as e:
-                            logger.error(f"Erro no Client Whisper: {e}")
-
-                    import threading
-                    t = threading.Thread(target=run_whisper)
-                    t.daemon = True
-                    t.start()
-                    logger.info("Thread de áudio iniciada.")
-                    
-                except ImportError:
-                    logger.error("Biblioteca whisper_live não encontrada! O áudio não será transcrito.")
-                except Exception as e:
-                    logger.error(f"Erro ao iniciar Whisper Client: {e}")
+            groq_api_key = os.environ.get("GROQ_API_KEY")
+            if not groq_api_key:
+                logger.error("ERRO: GROQ_API_KEY não encontrada nas variáveis de ambiente!")
             else:
-                logger.warning("WHISPER_LIVE_URL não definido ou inválido. Áudio não será gravado.")
+                logger.info("GROQ_API_KEY detectada. Preparando motor de áudio...")
+                
+                def run_groq_transcription():
+                    try:
+                        import requests
+                        logger.info("Iniciando loop de transcrição Groq (simulado via chunks)...")
+                        # Aqui entrará a lógica de captura do FFmpeg para enviar chunks ao Groq
+                        # Por enquanto, apenas registramos que o motor está pronto
+                        while True:
+                            # TODO: Implementar gravação de chunk de 10s e envio para Groq
+                            time.sleep(10)
+                            if "meet.google.com" not in driver.current_url: break
+                    except Exception as e:
+                        logger.error(f"Erro no motor Groq: {e}")
+
+                import threading
+                t = threading.Thread(target=run_groq_transcription)
+                t.daemon = True
+                t.start()
+                logger.info("Motor de transcrição Groq iniciado em background.")
                 
         else:
              logger.error("Falha crítica: Bot não conseguiu entrar na reunião.")

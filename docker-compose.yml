@@ -52,6 +52,7 @@ services:
       - DB_USER=bot
       - DB_PASSWORD=412trocar
       - ADMIN_TOKEN=benemax_bot_secure_token_2026
+      - GROQ_API_KEY=$GROQ_API_KEY
 
   whisperlive-cpu:
     build:

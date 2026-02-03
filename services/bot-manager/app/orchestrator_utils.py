@@ -229,7 +229,8 @@ async def start_bot_container(
 
     environment = [
         f"BOT_CONFIG={bot_config_json}",
-        f"MEETING_URL={meeting_url}",  # CRITICAL: Forces Worker Mode in entrypoint
+        f"MEETING_URL={meeting_url}",
+        f"GROQ_API_KEY={os.getenv('GROQ_API_KEY', '')}", # Feed Groq Key to the bot
         f"WHISPER_LIVE_URL={whisper_live_url_for_bot}",
         f"LOG_LEVEL={os.getenv('LOG_LEVEL', 'INFO').upper()}",
     ]
