@@ -284,20 +284,18 @@ async def start_bot_container(
 
     return None, None # Return None for both if error occurs
 
-def stop_bot_container(container_id: str) -> bool:
-    """Stops a container using its ID via requests_unixsocket."""
-    session = get_socket_session()
-    if not session:
-        logger.error(f"Cannot stop container {container_id}, requests_unixsocket session not available.")
+async def stop_bot_container(container_id: str) -> bool:
+    """Stops a container using its ID via aiodocker."""
+    try:
+        from .orchestrator_utils import get_docker_client
+        docker = await get_docker_client()
+        container = await docker.containers.get(container_id)
+        await container.stop()
+        await docker.close()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to stop container {container_id} via aiodocker: {e}")
         return False
-
-    # Ensure absolute path for URL encoding here as well
-    socket_path_relative = DOCKER_HOST.split('//', 1)[1]
-    socket_path_abs = f"/{socket_path_relative}"
-    socket_path_encoded = socket_path_abs.replace("/", "%2F")
-    socket_url_base = f'http+unix://{socket_path_encoded}'
-    
-    stop_url = f'{socket_url_base}/containers/{container_id}/stop'
     # Since AutoRemove=True, we don't need a separate remove call
 
     try:

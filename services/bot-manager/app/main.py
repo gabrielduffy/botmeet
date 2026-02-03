@@ -2137,7 +2137,7 @@ async def reconcile_meetings_and_containers():
                         # Container has meeting_id label but meeting doesn't exist - kill container
                         logger.warning(f"[Reconciliation] ORPHAN CONTAINER detected: Container {container_id} has meeting_id {meeting_id} but meeting doesn't exist. Killing container...")
                         try:
-                            stop_bot_container(container_id)
+                            await stop_bot_container(container_id)
                             orphan_containers_killed += 1
                             logger.info(f"[Reconciliation] Killed orphan container {container_id}")
                         except Exception as e:
@@ -2149,7 +2149,7 @@ async def reconcile_meetings_and_containers():
                     if meeting.status in terminal_states:
                         logger.warning(f"[Reconciliation] ORPHAN CONTAINER detected: Container {container_id} is running but meeting {meeting_id} is {meeting.status}. Killing container...")
                         try:
-                            stop_bot_container(container_id)
+                            await stop_bot_container(container_id)
                             orphan_containers_killed += 1
                             logger.info(f"[Reconciliation] Killed orphan container {container_id} for terminal meeting {meeting_id}")
                         except Exception as e:
