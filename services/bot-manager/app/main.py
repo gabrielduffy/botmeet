@@ -659,17 +659,17 @@ async def root():
                 setTimeout(() => t.classList.remove('show'), 3000);
             }
 
-            function appendLog(msg, type = 'info') {
+            function appendLog(msg, type = 'info', skipTime = false) {
                 const logs = document.getElementById('live-logs');
                 const entry = document.createElement('div');
-                const time = new Date().toLocaleTimeString();
+                const time = skipTime ? "" : `<span style="color: #444;">[${new Date().toLocaleTimeString()}]</span> `;
                 
                 let color = '#0f0'; // Default green
                 if (type === 'error') color = '#f00';
                 if (type === 'system') color = '#888';
                 if (type === 'warn') color = '#ff0';
 
-                entry.innerHTML = `<span style="color: #444;">[${time}]</span> <span style="color: ${color};">${msg}</span>`;
+                entry.innerHTML = `${time}<span style="color: ${color};">${msg}</span>`;
                 logs.appendChild(entry);
                 logs.scrollTop = logs.scrollHeight;
             }
@@ -677,23 +677,23 @@ async def root():
             let logPollingInterval = null;
             function startLogPolling(meetingId) {
                 if (logPollingInterval) clearInterval(logPollingInterval);
-                appendLog(`🚀 [SISTEMA] Iniciando monitoramento da reunião ID: ${meetingId}...`, 'system');
+                const logDiv = document.getElementById('live-logs');
+                logDiv.innerHTML = '';
+                appendLog(`🚀 [SISTEMA] Iniciando monitoramento em tempo real... ID: ${meetingId}`, 'system');
                 
                 logPollingInterval = setInterval(async () => {
                     try {
                         const res = await fetch(`/api/admin/logs/${meetingId}`);
                         const data = await res.json();
                         if (data.logs && data.logs.length > 0) {
-                            // Limpa e repovoa para simplificar o polling de teste
-                            // Em produção usaríamos ID de logs para não repetir
-                            const logDiv = document.getElementById('live-logs');
                             logDiv.innerHTML = '';
                             data.logs.forEach(log => {
-                                appendLog(log.msg, log.type || 'info');
+                                // Os logs do Docker já são mensagens completas
+                                appendLog(log.msg, log.type || 'info', true);
                             });
                         }
                     } catch (e) { console.error("Log poll error", e); }
-                }, 3000);
+                }, 2000);
             }
 
             async function launchBot() {
@@ -2161,19 +2161,35 @@ async def reconcile_meetings_and_containers():
 
 @app.get("/api/admin/logs/{meeting_id}")
 async def get_meeting_logs(meeting_id: int, db: AsyncSession = Depends(get_db)):
-    """Fetch recent logs for a specific meeting from the database or Redis."""
+    """Fetch real-time logs from the Docker container if available, otherwise from DB."""
     meeting = await db.get(Meeting, meeting_id)
-    if not meeting:
-        return {"logs": []}
+    if not meeting or not meeting.bot_container_id:
+        return {"logs": [{"msg": "Aguardando inicialização do container...", "type": "system"}]}
     
-    # In a real scenario, logs could be in Redis for real-time or in meeting.data
-    logs = meeting.data.get("logs", []) if meeting.data else []
-    
-    # Let's also add some dummy context if logs are empty to show it's working
-    if not logs:
-        logs = [{"time": datetime.utcnow().isoformat(), "msg": f"Monitoring meeting {meeting_id}...", "type": "system"}]
+    try:
+        from app.orchestrator_utils import get_docker_client
+        docker = await get_docker_client()
         
-    return {"logs": logs}
+        # Tenta buscar os logs do container real
+        try:
+            container = await docker.containers.get(meeting.bot_container_id)
+            logs_raw = await container.log(stdout=True, stderr=True, tail=100)
+            
+            formatted_logs = []
+            for line in logs_raw:
+                formatted_logs.append({
+                    "time": datetime.utcnow().isoformat(),
+                    "msg": line.strip(),
+                    "type": "info" if "ERROR" not in line.upper() else "error"
+                })
+            return {"logs": formatted_logs}
+        except Exception as e:
+            logger.warning(f"Could not get logs for container {meeting.bot_container_id}: {e}")
+            return {"logs": [{"msg": f"Container possivelmente finalizado. Erro: {str(e)}", "type": "warn"}]}
+            
+    except Exception as e:
+        logger.error(f"Error in get_meeting_logs: {e}")
+        return {"logs": [{"msg": f"Erro ao acessar orquestrador: {str(e)}", "type": "error"}]}
 
 # Schedule reconciliation task to run periodically (every 5 minutes)
 async def start_reconciliation_scheduler():
