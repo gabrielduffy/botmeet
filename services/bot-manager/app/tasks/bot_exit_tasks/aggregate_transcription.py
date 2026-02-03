@@ -37,20 +37,30 @@ async def run(meeting: Meeting, db: AsyncSession):
 
             unique_speakers = set()
             unique_languages = set()
+            full_transcript_parts = []
             
             for segment in transcription_segments:
-                speaker = segment.get('speaker')
+                speaker = segment.get('speaker', 'Unknown')
+                text = segment.get('text', '').strip()
                 language = segment.get('language')
-                if speaker and speaker.strip():
+                
+                if speaker:
                     unique_speakers.add(speaker.strip())
-                if language and language.strip():
+                if language:
                     unique_languages.add(language.strip())
+                
+                if text:
+                    full_transcript_parts.append(f"{speaker}: {text}")
+            
+            full_transcription = "\n".join(full_transcript_parts)
             
             aggregated_data = {}
             if unique_speakers:
                 aggregated_data['participants'] = sorted(list(unique_speakers))
             if unique_languages:
                 aggregated_data['languages'] = sorted(list(unique_languages))
+            if full_transcription:
+                aggregated_data['transcription'] = full_transcription
             
             if aggregated_data:
                 # Use a flag to track if the data object was changed
@@ -58,20 +68,16 @@ async def run(meeting: Meeting, db: AsyncSession):
                 # Ensure meeting.data is a dictionary
                 existing_data = meeting.data or {}
                 
-                # Update participants if not present
-                if 'participants' not in existing_data and 'participants' in aggregated_data:
-                    existing_data['participants'] = aggregated_data['participants']
-                    data_changed = True
-
-                # Update languages if not present
-                if 'languages' not in existing_data and 'languages' in aggregated_data:
-                    existing_data['languages'] = aggregated_data['languages']
-                    data_changed = True
+                # Update fields if not present
+                for key, value in aggregated_data.items():
+                    if key not in existing_data or (not existing_data[key] and value):
+                        existing_data[key] = value
+                        data_changed = True
                 
                 if data_changed:
                     meeting.data = existing_data
                     # The caller is responsible for the commit
-                    logger.info(f"Auto-aggregated data for meeting {meeting_id}: {aggregated_data}")
+                    logger.info(f"Auto-aggregated transcription data for meeting {meeting_id}")
                 else:
                     logger.info(f"Data for 'participants' and 'languages' already exists in meeting {meeting_id}. No update performed.")
 
