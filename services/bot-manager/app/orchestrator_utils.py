@@ -169,19 +169,16 @@ async def start_bot_container(
     """
     # Concurrency limit is now checked in request_bot (fast-fail). Keep minimal here.
 
-    # --- Original start_bot_container logic (using requests_unixsocket) --- 
-    session = get_socket_session()
-    if not session:
-        logger.error("Cannot start bot container, requests_unixsocket session not available.")
-        return None, None
-
+    # Use aiodocker for a more robust connection to Docker daemon
+    docker = aiodocker.Docker()
+    
     container_name = f"vexa-bot-{meeting_id}-{uuid.uuid4().hex[:8]}"
     if not bot_name:
         bot_name = f"VexaBot-{uuid.uuid4().hex[:6]}"
     connection_id = str(uuid.uuid4())
     logger.info(f"Generated unique connectionId for bot session: {connection_id}")
 
-    # Mint MeetingToken (HS256) - import at top of file if not present
+    # Mint MeetingToken
     from app.main import mint_meeting_token
     try:
         meeting_token = mint_meeting_token(
@@ -189,25 +186,25 @@ async def start_bot_container(
             user_id=user_id,
             platform=platform,
             native_meeting_id=native_meeting_id,
-            ttl_seconds=7200  # 2 hours
+            ttl_seconds=7200
         )
     except Exception as token_err:
-        logger.error(f"Failed to mint MeetingToken for meeting {meeting_id}: {token_err}", exc_info=True)
+        logger.error(f"Failed to mint MeetingToken for meeting {meeting_id}: {token_err}")
+        await docker.close()
         return None, None
     
-    # Construct BOT_CONFIG JSON - Include new fields
     bot_config_data = {
         "meeting_id": meeting_id,
         "platform": platform,
         "meetingUrl": meeting_url,
         "botName": bot_name,
-        "token": meeting_token,  # MeetingToken (HS256 JWT)
+        "token": meeting_token,
         "nativeMeetingId": native_meeting_id,
         "connectionId": connection_id,
         "language": language,
         "task": task,
         "redisUrl": REDIS_URL,
-        "container_name": container_name,  # ADDED: Container name for identification
+        "container_name": container_name,
         "automaticLeave": {
             "waitingRoomTimeout": 300000,
             "noOneJoinedTimeout": 120000,
@@ -215,73 +212,44 @@ async def start_bot_container(
         },
         "botManagerCallbackUrl": f"http://bot-manager:8080/bots/internal/callback/exited"
     }
-    # Remove keys with None values before serializing
     cleaned_config_data = {k: v for k, v in bot_config_data.items() if v is not None}
     bot_config_json = json.dumps(cleaned_config_data)
 
-    logger.debug(f"Bot config: {bot_config_json}") # Log the full config
-
-    # Get the WhisperLive URL from bot-manager's own environment.
-    # This is set in docker-compose.yml to ws://whisperlive.internal/ws to go through Traefik.
-    whisper_live_url_for_bot = os.getenv('WHISPER_LIVE_URL')
-
-    if not whisper_live_url_for_bot:
-        # This should ideally not happen if docker-compose.yml is correctly configured.
-        logger.error("CRITICAL: WHISPER_LIVE_URL is not set in bot-manager's environment. Falling back to default, but this should be fixed in docker-compose.yml for bot-manager service.")
-        whisper_live_url_for_bot = 'ws://whisperlive.internal/ws' # Fallback, but log an error.
-
+    whisper_live_url_for_bot = os.getenv('WHISPER_LIVE_URL', 'ws://whisperlive-cpu:9090/ws')
     logger.info(f"Passing WHISPER_LIVE_URL to bot: {whisper_live_url_for_bot}")
 
-    # These are the environment variables passed to the Node.js process  of the vexa-bot started by your entrypoint.sh.
     environment = [
         f"BOT_CONFIG={bot_config_json}",
-        f"WHISPER_LIVE_URL={whisper_live_url_for_bot}", # Use the URL from bot-manager's env
+        f"WHISPER_LIVE_URL={whisper_live_url_for_bot}",
         f"LOG_LEVEL={os.getenv('LOG_LEVEL', 'INFO').upper()}",
     ]
 
-    # Ensure absolute path for URL encoding here as well
-    socket_path_relative = DOCKER_HOST.split('//', 1)[1]
-    socket_path_abs = f"/{socket_path_relative}"
-    socket_path_encoded = socket_path_abs.replace("/", "%2F")
-    socket_url_base = f'http+unix://{socket_path_encoded}'
-
-    # Docker API payload for creating a container
-    create_payload = {
+    config = {
         "Image": BOT_IMAGE_NAME,
         "Env": environment,
-        "Labels": {"vexa.user_id": str(user_id)}, # *** ADDED Label ***
+        "Labels": {"vexa.user_id": str(user_id), "vexa.meeting_id": str(meeting_id)},
         "HostConfig": {
             "NetworkMode": DOCKER_NETWORK,
             "AutoRemove": True,
         },
     }
 
-    create_url = f'{socket_url_base}/containers/create?name={container_name}'
-    start_url_template = f'{socket_url_base}/containers/{{}}/start'
-
-    container_id = None # Initialize container_id
     try:
-        logger.info(f"Attempting to create bot container '{container_name}' ({BOT_IMAGE_NAME}) via socket ({socket_url_base})...")
-        response = session.post(create_url, json=create_payload)
-        response.raise_for_status()
-        container_info = response.json()
-        container_id = container_info.get('Id')
-
-        if not container_id:
-            logger.error(f"Failed to create container: No ID in response: {container_info}")
-            return None, None
-
+        logger.info(f"Attempting to create bot container '{container_name}' using image '{BOT_IMAGE_NAME}'...")
+        container = await docker.containers.create(config=config, name=container_name)
+        container_id = container.id[:12] # Get short ID
+        
         logger.info(f"Container {container_id} created. Starting...")
+        await container.start()
 
-        start_url = start_url_template.format(container_id)
-        response = session.post(start_url)
+        logger.info(f"Successfully started container {container_id} for meeting {meeting_id}")
+        await docker.close()
+        return container_id, connection_id
 
-        if response.status_code != 204:
-            logger.error(f"Failed to start container {container_id}. Status: {response.status_code}, Response: {response.text}")
-            # Consider removing the created container if start fails?
-            return None, None
-
-        logger.info(f"Successfully started container {container_id} for meeting: {meeting_id}")
+    except Exception as e:
+        logger.error(f"Failed to start bot container via aiodocker: {str(e)}", exc_info=True)
+        await docker.close()
+        return None, None
         
         # *** REMOVED Session Recording Call - To be handled by caller ***
         # try:
