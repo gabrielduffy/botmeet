@@ -222,17 +222,54 @@ def start_bot(meet_url):
                 logger.info("GROQ_API_KEY detectada. Preparando motor de áudio...")
                 
                 def run_groq_transcription():
-                    try:
-                        import requests
-                        logger.info("Iniciando loop de transcrição Groq (simulado via chunks)...")
-                        # Aqui entrará a lógica de captura do FFmpeg para enviar chunks ao Groq
-                        # Por enquanto, apenas registramos que o motor está pronto
-                        while True:
-                            # TODO: Implementar gravação de chunk de 10s e envio para Groq
-                            time.sleep(10)
-                            if "meet.google.com" not in driver.current_url: break
-                    except Exception as e:
-                        logger.error(f"Erro no motor Groq: {e}")
+                    import requests
+                    import subprocess
+                    
+                    logger.info("🎙️ [Motor Groq] Iniciando loop de captura de áudio (Chunks de 10s)...")
+                    
+                    while True:
+                        if "meet.google.com" not in driver.current_url: 
+                            logger.info("Reunião encerrada. Parando motor de áudio.")
+                            break
+                            
+                        chunk_file = f"/tmp/chunk_{int(time.time())}.mp3"
+                        try:
+                            # 1. Grava 10 segundos do áudio do sistema (PulseAudio)
+                            # -f pulse -i default (captura o que o robô está ouvindo)
+                            subprocess.run([
+                                "ffmpeg", "-y", "-f", "pulse", "-i", "default",
+                                "-t", "10", "-acodec", "libmp3lame", chunk_file
+                            ], check=True, capture_output=True)
+                            
+                            # 2. Envia para o Groq
+                            with open(chunk_file, "rb") as f:
+                                response = requests.post(
+                                    "https://api.groq.com/openai/v1/audio/transcriptions",
+                                    headers={"Authorization": f"Bearer {groq_api_key}"},
+                                    files={"file": (os.path.basename(chunk_file), f)},
+                                    data={
+                                        "model": "whisper-large-v3",
+                                        "language": "pt",
+                                        "response_format": "json"
+                                    },
+                                    timeout=15
+                                )
+                            
+                            if response.status_code == 200:
+                                text = response.json().get("text", "").strip()
+                                if text:
+                                    # EXIBE A TRANSCRIÇÃO NO TERMINAL DO DASHBOARD
+                                    print(f"📝 [TRANSCRIÇÃO]: {text}", flush=True)
+                            else:
+                                logger.error(f"Erro Groq API: {response.text}")
+                                
+                        except Exception as e:
+                            logger.error(f"Erro no ciclo de áudio: {e}")
+                        finally:
+                            if os.path.exists(chunk_file):
+                                os.remove(chunk_file)
+                        
+                        time.sleep(1) # Pequena pausa entre chunks
 
                 import threading
                 t = threading.Thread(target=run_groq_transcription)
