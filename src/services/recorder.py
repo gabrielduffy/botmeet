@@ -224,22 +224,37 @@ def start_bot(meet_url):
                 def run_groq_transcription():
                     import requests
                     import subprocess
+                    import json
                     
-                    logger.info("🎙️ [Motor Groq] Iniciando loop de captura de áudio (Chunks de 10s)...")
+                    # Carrega IDs do ambiente para o callback
+                    bot_config_raw = os.environ.get("BOT_CONFIG", "{}")
+                    try:
+                        bot_config = json.loads(bot_config_raw)
+                    except:
+                        bot_config = {}
+                    
+                    meeting_id = bot_config.get("meeting_id")
+                    connection_id = bot_config.get("connection_id")
+                    callback_url = os.environ.get("CALLBACK_URL", "http://bot-manager:8080")
+                    
+                    session_start_time = time.time()
+                    logger.info(f"🎙️ [Motor Groq] Iniciando loop de captura (Chunk=10s, Meeting ID={meeting_id})")
                     
                     while True:
                         if "meet.google.com" not in driver.current_url: 
                             logger.info("Reunião encerrada. Parando motor de áudio.")
                             break
-                            
+                        
+                        start_time_rel = time.time() - session_start_time
                         chunk_file = f"/tmp/chunk_{int(time.time())}.mp3"
                         try:
-                            # 1. Grava 10 segundos do áudio do sistema (PulseAudio)
-                            # -f pulse -i default (captura o que o robô está ouvindo)
+                            # 1. Grava áudio do sistema
                             subprocess.run([
                                 "ffmpeg", "-y", "-f", "pulse", "-i", "default",
                                 "-t", "10", "-acodec", "libmp3lame", chunk_file
                             ], check=True, capture_output=True)
+                            
+                            end_time_rel = time.time() - session_start_time
                             
                             # 2. Envia para o Groq
                             with open(chunk_file, "rb") as f:
@@ -258,8 +273,31 @@ def start_bot(meet_url):
                             if response.status_code == 200:
                                 text = response.json().get("text", "").strip()
                                 if text:
-                                    # EXIBE A TRANSCRIÇÃO NO TERMINAL DO DASHBOARD
-                                    print(f"📝 [TRANSCRIÇÃO]: {text}", flush=True)
+                                    # FILTRO DE ALUCINAÇÃO (Obrigado em silêncio)
+                                    # Se for apenas "Obrigado" ou variações curtas de silêncio do Whisper, ignoramos
+                                    if text.lower().replace(".", "").strip() in ["obrigado", "thank you", "legendas por", "legendas pelo"]:
+                                        logger.debug(f"Silêncio detectado (ignorado): {text}")
+                                    else:
+                                        print(f"📝 [TRANSCRIÇÃO]: {text}", flush=True)
+                                        
+                                        # 3. SALVAR NO BANCO DE DADOS (Callback para o Bot Manager)
+                                        if meeting_id and connection_id:
+                                            try:
+                                                requests.post(
+                                                    f"{callback_url}/bots/internal/callback/transcription",
+                                                    json={
+                                                        "connection_id": str(connection_id),
+                                                        "meeting_id": int(meeting_id),
+                                                        "text": text,
+                                                        "start_time": float(start_time_rel),
+                                                        "end_time": float(end_time_rel),
+                                                        "speaker": "Participante", # Por enquanto genérico
+                                                        "language": "pt"
+                                                    },
+                                                    timeout=5
+                                                )
+                                            except Exception as eb:
+                                                logger.error(f"Erro ao salvar transcrição no banco: {eb}")
                             else:
                                 logger.error(f"Erro Groq API: {response.text}")
                                 

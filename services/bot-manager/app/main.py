@@ -303,18 +303,16 @@ class BotStartupCallbackPayload(BaseModel):
     connection_id: str = Field(..., description="The connection ID of the bot session.")
     container_id: str = Field(..., description="The container ID of the started bot.")
 
-class BotStatusChangePayload(BaseModel):
-    """Unified payload for all bot status change callbacks."""
-    connection_id: str = Field(..., description="The connection ID of the bot session.")
-    container_id: Optional[str] = Field(None, description="The container ID of the bot.")
-    status: MeetingStatus = Field(..., description="The new status of the meeting.")
-    reason: Optional[str] = Field(None, description="Reason for the status change.")
-    exit_code: Optional[int] = Field(None, description="Exit code if applicable.")
-    error_details: Optional[Dict[str, Any]] = Field(None, description="Detailed error information.")
-    platform_specific_error: Optional[str] = Field(None, description="Platform-specific error message.")
-    completion_reason: Optional[MeetingCompletionReason] = Field(None, description="Reason for completion if applicable.")
-    failure_stage: Optional[MeetingFailureStage] = Field(None, description="Stage where failure occurred if applicable.")
     timestamp: Optional[str] = Field(None, description="Timestamp of the status change.")
+
+class TranscriptionCallbackPayload(BaseModel):
+    connection_id: str = Field(..., description="The connection ID of the bot session.")
+    meeting_id: int = Field(..., description="The ID of the meeting.")
+    text: str = Field(..., description="The transcribed text.")
+    start_time: float = Field(..., description="Start time (float).")
+    end_time: float = Field(..., description="End time (float).")
+    speaker: Optional[str] = Field(None, description="Speaker identifier.")
+    language: Optional[str] = Field("pt", description="Language code.")
 
 # --- --------------------------------------------- ---
 
@@ -1710,6 +1708,40 @@ async def bot_joining_callback(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the bot joining callback."
+        )
+
+@app.post("/bots/internal/callback/transcription",
+          status_code=status.HTTP_201_CREATED,
+          summary="Callback for vexa-bot to report transcriptions",
+          include_in_schema=False)
+async def bot_transcription_callback(
+    payload: TranscriptionCallbackPayload,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Saves a transcription received from the bot into the database.
+    """
+    logger.debug(f"Received transcription for meeting {payload.meeting_id}: {payload.text[:50]}...")
+    
+    try:
+        new_transcription = Transcription(
+            meeting_id=payload.meeting_id,
+            start_time=payload.start_time,
+            end_time=payload.end_time,
+            text=payload.text,
+            speaker=payload.speaker,
+            language=payload.language,
+            session_uid=payload.connection_id
+        )
+        db.add(new_transcription)
+        await db.commit()
+        return {"status": "saved", "id": new_transcription.id}
+    except Exception as e:
+        logger.error(f"Error saving transcription: {e}", exc_info=True)
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to save transcription"
         )
 
 # --- ADDED: Endpoint for Vexa-Bot to report awaiting admission status ---
