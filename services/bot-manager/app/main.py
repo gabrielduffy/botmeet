@@ -959,12 +959,11 @@ async def request_bot(
     result = await db.execute(existing_meeting_stmt)
     existing_meeting = result.scalars().first()
     if existing_meeting:
-        logger.info(f"Found existing meeting record {existing_meeting.id} with status '{existing_meeting.status}' for user {current_user.id}, platform '{req.platform.value}', native ID '{native_meeting_id}'.")
-        # Enforce DB-only uniqueness: if there's any non-terminal meeting (requested/joining/awaiting_admission/active), reject immediately.
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"An active or requested meeting already exists for this platform and meeting ID. Platform: {req.platform.value}, Native Meeting ID: {native_meeting_id}"
-        )
+        logger.info(f"Found existing meeting record {existing_meeting.id} with status '{existing_meeting.status}'. Forcing cleanup and allowing new launch.")
+        # Mark old meeting as failed so it doesn't block this one
+        existing_meeting.status = 'failed'
+        existing_meeting.completion_reason = 'stopped_for_new_launch'
+        await db.commit()
     
     # --- Fast-fail concurrency limit check (DB-based) ---
     user_limit = int(getattr(current_user, "max_concurrent_bots", 0) or 0)
@@ -989,44 +988,29 @@ async def request_bot(
                 detail=f"User has reached the maximum concurrent bot limit ({user_limit})."
             )
     
-    if existing_meeting is None:
-        logger.info(f"No active/valid existing meeting found for user {current_user.id}, platform '{req.platform.value}', native ID '{native_meeting_id}'. Proceeding to create a new meeting record.")
-        # Create Meeting record in DB
-        # Prepare data field with passcode if provided
-        meeting_data = {}
-        if req.passcode:
-            meeting_data['passcode'] = req.passcode
-            
-        new_meeting = Meeting(
-            user_id=current_user.id,
-            platform=req.platform.value,
-            platform_specific_id=native_meeting_id,
-            status=MeetingStatus.REQUESTED.value,
-            data=meeting_data,
-            # Ensure other necessary fields like created_at are handled by the model or explicitly set
-        )
-        db.add(new_meeting)
-        await db.commit()
-        await db.refresh(new_meeting)
-        meeting_id_for_bot = new_meeting.id # Use this for the bot
-        logger.info(f"Created new meeting record with ID: {meeting_id_for_bot}")
-        # Publish initial 'requested' status so clients receive it via WebSocket
-        try:
-            await publish_meeting_status_change(meeting_id_for_bot, 'requested', redis_client, req.platform.value, native_meeting_id, current_user.id)
-            logger.info(f"Published initial meeting.status 'requested' for meeting {meeting_id_for_bot}")
-        except Exception as _pub_err:
-            logger.warning(f"Failed to publish initial 'requested' status for meeting {meeting_id_for_bot}: {_pub_err}")
-    else: # This case should ideally not be reached if the 409 was raised correctly above.
-          # This implies existing_meeting was found and its container was running.
-        logger.error(f"Logic error: Should have raised 409 for existing meeting {existing_meeting.id}, but proceeding.")
-        # To be safe, let's still use the existing meeting's ID if we reach here, though it implies a flaw.
-        # However, the goal is to *prevent* duplicate bot launch if one is truly active.
-        # The HTTPException should have been raised.
-        # For safety, re-raise, as this path indicates an issue if the container was deemed running.
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"An active or requested meeting already exists for this platform and meeting ID. Meeting ID: {existing_meeting.id}"
-        )
+    logger.info(f"Proceeding to create a new meeting record for user {current_user.id}, native ID '{native_meeting_id}'.")
+    meeting_data = {}
+    if req.passcode:
+        meeting_data['passcode'] = req.passcode
+        
+    new_meeting = Meeting(
+        user_id=current_user.id,
+        platform=req.platform.value,
+        platform_specific_id=native_meeting_id,
+        status=MeetingStatus.REQUESTED.value,
+        data=meeting_data,
+    )
+    db.add(new_meeting)
+    await db.commit()
+    await db.refresh(new_meeting)
+    meeting_id_for_bot = new_meeting.id # Use this for the bot
+    logger.info(f"Created new meeting record with ID: {meeting_id_for_bot}")
+    
+    try:
+        await publish_meeting_status_change(meeting_id_for_bot, 'requested', redis_client, req.platform.value, native_meeting_id, current_user.id)
+        logger.info(f"Published initial meeting.status 'requested' for meeting {meeting_id_for_bot}")
+    except Exception as _pub_err:
+        logger.warning(f"Failed to publish initial 'requested' status for meeting {meeting_id_for_bot}: {_pub_err}")
 
 
     # The 'new_meeting' variable might not be defined if we used an existing one that was cleaned up.
