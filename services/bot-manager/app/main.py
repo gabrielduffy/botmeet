@@ -689,12 +689,13 @@ async def root():
                         setTimeout(loadContainers, 2000);
                     } else {
                         status.style.color = 'var(--danger)';
-                        const errorMsg = data.detail || (typeof data === 'object' ? JSON.stringify(data) : data);
-                        status.innerText = `❌ Erro: ${errorMsg}`;
+                        // Força a conversão de qualquer resposta em texto legível
+                        const errorDetail = data.detail || data.error || JSON.stringify(data);
+                        status.innerText = `❌ Erro do Servidor: ${errorDetail}`;
                     }
                 } catch (e) {
                     status.style.color = 'var(--danger)';
-                    status.innerText = "❌ Erro de conexão com o servidor.";
+                    status.innerText = `❌ Falha na Comunicação: ${e.message}`;
                 } finally {
                     btn.disabled = false;
                     btn.innerText = "ENTRAR NA REUNIÃO";
