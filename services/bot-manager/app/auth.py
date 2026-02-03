@@ -26,13 +26,21 @@ async def get_api_key(api_key: str = Security(API_KEY_HEADER),
     admin_token_env = os.getenv("ADMIN_TOKEN") or os.getenv("ADMIN_API_TOKEN")
     if admin_token_env and api_key == admin_token_env:
         logger.info("Admin token validated from environment")
-        # Find the first user or return a mock if database is empty
-        result = await db.execute(select(User).limit(1))
-        user_obj = result.scalar_one_or_none()
+        
+        # We MUST have a user in the database to link his ID to the tokens
+        result = await db.execute(select(User).order_by(User.id))
+        user_obj = result.scalars().first()
         
         if not user_obj:
-            # Fallback for empty DB
-            user_obj = User(id=1, email="admin@benemax.com.br", name="Admin")
+            logger.info("No users found in DB, creating system admin user")
+            user_obj = User(
+                email="admin@benemax.com.br", 
+                name="System Administrator",
+                # id logic typically handled by DB, but we need it here
+            )
+            db.add(user_obj)
+            await db.commit()
+            await db.refresh(user_obj)
             
         return (api_key, user_obj)
 
