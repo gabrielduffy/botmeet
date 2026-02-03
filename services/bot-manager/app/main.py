@@ -689,9 +689,16 @@ async def root():
                         setTimeout(loadContainers, 2000);
                     } else {
                         status.style.color = 'var(--danger)';
-                        // Força a conversão de qualquer resposta em texto legível
-                        const errorDetail = data.detail || data.error || JSON.stringify(data);
-                        status.innerText = `❌ Erro do Servidor: ${errorDetail}`;
+                        // Extração inteligente de erro
+                        let msg = "Erro desconhecido";
+                        if (data.detail) {
+                            msg = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+                        } else if (data.error) {
+                            msg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+                        } else {
+                            msg = JSON.stringify(data);
+                        }
+                        status.innerText = `❌ Erro do Servidor: ${msg}`;
                     }
                 } catch (e) {
                     status.style.color = 'var(--danger)';
