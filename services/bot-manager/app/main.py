@@ -689,7 +689,8 @@ async def root():
                         setTimeout(loadContainers, 2000);
                     } else {
                         status.style.color = 'var(--danger)';
-                        status.innerText = `❌ Erro: ${data.detail || "Falha ao lançar bot"}`;
+                        const errorMsg = data.detail || (typeof data === 'object' ? JSON.stringify(data) : data);
+                        status.innerText = `❌ Erro: ${errorMsg}`;
                     }
                 } catch (e) {
                     status.style.color = 'var(--danger)';
