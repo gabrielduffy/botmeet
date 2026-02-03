@@ -229,6 +229,7 @@ async def start_bot_container(
 
     environment = [
         f"BOT_CONFIG={bot_config_json}",
+        f"MEETING_URL={meeting_url}",  # CRITICAL: Forces Worker Mode in entrypoint
         f"WHISPER_LIVE_URL={whisper_live_url_for_bot}",
         f"LOG_LEVEL={os.getenv('LOG_LEVEL', 'INFO').upper()}",
     ]
@@ -239,7 +240,7 @@ async def start_bot_container(
         "Labels": {"vexa.user_id": str(user_id), "vexa.meeting_id": str(meeting_id)},
         "HostConfig": {
             "NetworkMode": DOCKER_NETWORK,
-            "AutoRemove": True,
+            "AutoRemove": False, # Disabled for debugging so logs don't vanish
         },
     }
 
