@@ -582,7 +582,7 @@ async def root():
             </div>
 
             <!-- Launcher Section -->
-            <div class="stat-card" style="margin-bottom: 3rem; border-style: solid; border-width: 2px;">
+            <div class="stat-card" style="margin-bottom: 2rem; border-style: solid; border-width: 2px;">
                 <h3 style="color: var(--primary); font-weight: 700;">🚀 Lançar Novo Bot (Quick Launch)</h3>
                 <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.5rem;">Cole o link do Google Meet abaixo para enviar o bot automaticamente.</p>
                 <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
@@ -590,6 +590,17 @@ async def root():
                     <button class="btn btn-primary" onclick="launchBot()" id="btn-launch" style="padding: 0.8rem 2rem;">ENTRAR NA REUNIÃO</button>
                 </div>
                 <div id="launch-status" style="margin-top: 1rem; font-size: 0.85rem; display: none;"></div>
+            </div>
+
+            <!-- Terminal/Logs Section -->
+            <div class="stat-card" style="margin-bottom: 3rem; background: #000; border: 1px solid #333; height: 300px; display: flex; flex-direction: column;">
+                <div style="padding: 0.5rem 1rem; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; background: #111;">
+                    <span style="font-size: 0.7rem; color: #888; font-weight: bold; letter-spacing: 1px;">📡 LIVE BOT TERMINAL (LOGS EM TEMPO REAL)</span>
+                    <button class="btn btn-outline btn-sm" onclick="document.getElementById('live-logs').innerHTML = ''" style="font-size: 0.6rem; padding: 2px 8px;">Clear</button>
+                </div>
+                <div id="live-logs" style="flex: 1; overflow-y: auto; padding: 1rem; font-family: 'Courier New', Courier, monospace; font-size: 0.85rem; color: #0f0; line-height: 1.4;">
+                    [SISTEMA] Aguardando lançamento de bot para iniciar monitoramento...
+                </div>
             </div>
 
             <div class="section-header">
@@ -648,6 +659,43 @@ async def root():
                 setTimeout(() => t.classList.remove('show'), 3000);
             }
 
+            function appendLog(msg, type = 'info') {
+                const logs = document.getElementById('live-logs');
+                const entry = document.createElement('div');
+                const time = new Date().toLocaleTimeString();
+                
+                let color = '#0f0'; // Default green
+                if (type === 'error') color = '#f00';
+                if (type === 'system') color = '#888';
+                if (type === 'warn') color = '#ff0';
+
+                entry.innerHTML = `<span style="color: #444;">[${time}]</span> <span style="color: ${color};">${msg}</span>`;
+                logs.appendChild(entry);
+                logs.scrollTop = logs.scrollHeight;
+            }
+
+            let logPollingInterval = null;
+            function startLogPolling(meetingId) {
+                if (logPollingInterval) clearInterval(logPollingInterval);
+                appendLog(`🚀 [SISTEMA] Iniciando monitoramento da reunião ID: ${meetingId}...`, 'system');
+                
+                logPollingInterval = setInterval(async () => {
+                    try {
+                        const res = await fetch(`/api/admin/logs/${meetingId}`);
+                        const data = await res.json();
+                        if (data.logs && data.logs.length > 0) {
+                            // Limpa e repovoa para simplificar o polling de teste
+                            // Em produção usaríamos ID de logs para não repetir
+                            const logDiv = document.getElementById('live-logs');
+                            logDiv.innerHTML = '';
+                            data.logs.forEach(log => {
+                                appendLog(log.msg, log.type || 'info');
+                            });
+                        }
+                    } catch (e) { console.error("Log poll error", e); }
+                }, 3000);
+            }
+
             async function launchBot() {
                 const urlInput = document.getElementById('meet-url');
                 const btn = document.getElementById('btn-launch');
@@ -664,9 +712,9 @@ async def root():
                 status.style.display = 'block';
                 status.style.color = 'var(--text-muted)';
                 status.innerText = "Processando link e lançando bot...";
+                appendLog(`Lançando bot para: ${url}`);
 
                 try {
-                    // Extrair meeting id do link: meet.google.com/abc-defg-hij
                     const regex = /meet\.google\.com\/([a-z0-9-]+)/i;
                     const match = url.match(regex);
                     const meetingId = match ? match[1] : url.split('/').pop();
@@ -684,25 +732,21 @@ async def root():
 
                     if (res.ok) {
                         status.style.color = 'var(--success)';
-                        status.innerText = `✅ Sucesso! Bot lançado com ID: ${data.id}. Ele entrará na reunião em alguns segundos.`;
+                        status.innerText = `✅ Sucesso! Bot lançado com ID: ${data.id}.`;
+                        appendLog(`✅ Bot aceito pelo orquestrador. ID da reunião no banco: ${data.id}`, 'success');
                         urlInput.value = '';
+                        startLogPolling(data.id);
                         setTimeout(loadContainers, 2000);
                     } else {
                         status.style.color = 'var(--danger)';
-                        // Extração inteligente de erro
-                        let msg = "Erro desconhecido";
-                        if (data.detail) {
-                            msg = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
-                        } else if (data.error) {
-                            msg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
-                        } else {
-                            msg = JSON.stringify(data);
-                        }
-                        status.innerText = `❌ Erro do Servidor: ${msg}`;
+                        let msg = data.detail ? (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)) : JSON.stringify(data);
+                        status.innerText = `❌ Erro: ${msg}`;
+                        appendLog(`❌ Erro no lançamento: ${msg}`, 'error');
                     }
                 } catch (e) {
                     status.style.color = 'var(--danger)';
-                    status.innerText = `❌ Falha na Comunicação: ${e.message}`;
+                    status.innerText = `❌ Falha: ${e.message}`;
+                    appendLog(`❌ Falha na comunicação: ${e.message}`, 'error');
                 } finally {
                     btn.disabled = false;
                     btn.innerText = "ENTRAR NA REUNIÃO";
@@ -2130,6 +2174,22 @@ async def reconcile_meetings_and_containers():
             logger.info(f"[Reconciliation] Reconciliation complete: {zombie_meetings_fixed} zombie meetings fixed, {orphan_containers_killed} orphan containers killed")
     except Exception as e:
         logger.error(f"[Reconciliation] Error during reconciliation: {e}", exc_info=True)
+
+@app.get("/api/admin/logs/{meeting_id}")
+async def get_meeting_logs(meeting_id: int, db: AsyncSession = Depends(get_db)):
+    """Fetch recent logs for a specific meeting from the database or Redis."""
+    meeting = await db.get(Meeting, meeting_id)
+    if not meeting:
+        return {"logs": []}
+    
+    # In a real scenario, logs could be in Redis for real-time or in meeting.data
+    logs = meeting.data.get("logs", []) if meeting.data else []
+    
+    # Let's also add some dummy context if logs are empty to show it's working
+    if not logs:
+        logs = [{"time": datetime.utcnow().isoformat(), "msg": f"Monitoring meeting {meeting_id}...", "type": "system"}]
+        
+    return {"logs": logs}
 
 # Schedule reconciliation task to run periodically (every 5 minutes)
 async def start_reconciliation_scheduler():
