@@ -581,6 +581,17 @@ async def root():
                 </div>
             </div>
 
+            <!-- Launcher Section -->
+            <div class="stat-card" style="margin-bottom: 3rem; border-style: solid; border-width: 2px;">
+                <h3 style="color: var(--primary); font-weight: 700;">🚀 Lançar Novo Bot (Quick Launch)</h3>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.5rem;">Cole o link do Google Meet abaixo para enviar o bot automaticamente.</p>
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                    <input type="text" id="meet-url" placeholder="https://meet.google.com/abc-defg-hij" style="flex: 1; min-width: 300px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; padding: 0.8rem 1.2rem; color: var(--text); font-family: inherit;">
+                    <button class="btn btn-primary" onclick="launchBot()" id="btn-launch" style="padding: 0.8rem 2rem;">ENTRAR NA REUNIÃO</button>
+                </div>
+                <div id="launch-status" style="margin-top: 1rem; font-size: 0.85rem; display: none;"></div>
+            </div>
+
             <div class="section-header">
                 <h2>Recursos em Operação</h2>
                 <div style="display: flex; gap: 0.5rem;">
@@ -635,6 +646,58 @@ async def root():
                 t.innerText = msg;
                 t.classList.add('show');
                 setTimeout(() => t.classList.remove('show'), 3000);
+            }
+
+            async function launchBot() {
+                const urlInput = document.getElementById('meet-url');
+                const btn = document.getElementById('btn-launch');
+                const status = document.getElementById('launch-status');
+                const url = urlInput.value.trim();
+
+                if (!url) {
+                    showToast("Por favor, cole o link da reunião");
+                    return;
+                }
+
+                btn.disabled = true;
+                btn.innerText = "LANÇANDO...";
+                status.style.display = 'block';
+                status.style.color = 'var(--text-muted)';
+                status.innerText = "Processando link e lançando bot...";
+
+                try {
+                    // Extrair meeting id do link: meet.google.com/abc-defg-hij
+                    const regex = /meet\.google\.com\/([a-z0-9-]+)/i;
+                    const match = url.match(regex);
+                    const meetingId = match ? match[1] : url.split('/').pop();
+
+                    const res = await fetch('/bots', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            platform: "google_meet",
+                            native_meeting_id: meetingId
+                        })
+                    });
+
+                    const data = await res.json();
+
+                    if (res.ok) {
+                        status.style.color = 'var(--success)';
+                        status.innerText = `✅ Sucesso! Bot lançado com ID: ${data.id}. Ele entrará na reunião em alguns segundos.`;
+                        urlInput.value = '';
+                        setTimeout(loadContainers, 2000);
+                    } else {
+                        status.style.color = 'var(--danger)';
+                        status.innerText = `❌ Erro: ${data.detail || "Falha ao lançar bot"}`;
+                    }
+                } catch (e) {
+                    status.style.color = 'var(--danger)';
+                    status.innerText = "❌ Erro de conexão com o servidor.";
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = "ENTRAR NA REUNIÃO";
+                }
             }
 
             async function updateStats() {
