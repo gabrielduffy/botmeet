@@ -12,6 +12,7 @@ the chosen backend.
 from app.orchestrator_utils import (  # noqa: F401
     get_socket_session,
     close_docker_client,
+    get_docker_client,
     start_bot_container,
     stop_bot_container,
     _record_session_start,

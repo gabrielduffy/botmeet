@@ -2167,7 +2167,10 @@ async def get_meeting_logs(meeting_id: int, db: AsyncSession = Depends(get_db)):
         return {"logs": [{"msg": "Aguardando inicialização do container...", "type": "system"}]}
     
     try:
-        from app.orchestrator_utils import get_docker_client
+        from app.orchestrators import get_docker_client
+        if not get_docker_client:
+            return {"logs": [{"msg": "Recurso Docker não disponível neste modo.", "type": "error"}]}
+        
         docker = await get_docker_client()
         
         # Tenta buscar os logs do container real

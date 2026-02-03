@@ -33,6 +33,7 @@ mod = importlib.import_module(module_name)
 # Re-export a stable interface expected by the rest of the codebase
 get_socket_session = getattr(mod, "get_socket_session", lambda *args, **kwargs: None)
 close_docker_client = getattr(mod, "close_docker_client", getattr(mod, "close_client", lambda: None))
+get_docker_client = getattr(mod, "get_docker_client", lambda: None)
 start_bot_container = mod.start_bot_container  # type: ignore
 stop_bot_container = getattr(mod, "stop_bot_container", lambda *args, **kwargs: None)
 _record_session_start = getattr(mod, "_record_session_start", lambda *args, **kwargs: None)
