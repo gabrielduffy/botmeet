@@ -1063,8 +1063,8 @@ async def request_bot(
         container_start_time = datetime.utcnow()
         logger.info(f"Call to start_bot_container completed. Container ID: {container_id}, Connection ID: {connection_id}")
 
-        if not container_id or not connection_id:
-            error_msg = "Failed to start bot container."
+        if not container_id or "ERROR:" in container_id or not connection_id:
+            error_msg = f"Failed to start bot container. {container_id if container_id and 'ERROR:' in container_id else ''}"
             if not container_id: error_msg += " Container ID not returned."
             if not connection_id: error_msg += " Connection ID not generated/returned."
             logger.error(f"{error_msg} for meeting {meeting_id}")

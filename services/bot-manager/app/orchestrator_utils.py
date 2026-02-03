@@ -247,9 +247,11 @@ async def start_bot_container(
         return container_id, connection_id
 
     except Exception as e:
-        logger.error(f"Failed to start bot container via aiodocker: {str(e)}", exc_info=True)
+        error_detail = str(e)
+        logger.error(f"Failed to start bot container via aiodocker: {error_detail}", exc_info=True)
         await docker.close()
-        return None, None
+        # Return the error message instead of None for the container_id
+        return f"ERROR: {error_detail}", connection_id
         
         # *** REMOVED Session Recording Call - To be handled by caller ***
         # try:
