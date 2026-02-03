@@ -5,8 +5,11 @@ if not REDIS_URL:
     raise ValueError("Missing required environment variable: REDIS_URL")
 
 # Bot configuration
-BOT_IMAGE_NAME = os.environ.get("BOT_IMAGE_NAME", "vexa-bot:latest")
-DOCKER_NETWORK = os.environ.get("DOCKER_NETWORK", "vexa_default")
+BOT_IMAGE_NAME = os.environ.get("BOT_IMAGE_NAME", "easypanel/sortebem/bot:latest")
+DOCKER_NETWORK = os.environ.get("DOCKER_NETWORK", "easypanel-sortebem")
+
+if BOT_IMAGE_NAME == "vexa-bot:dev" or BOT_IMAGE_NAME == "vexa-bot:latest":
+    BOT_IMAGE_NAME = "easypanel/sortebem/bot:latest"
 
 # Lock settings
 LOCK_TIMEOUT_SECONDS = 300 # 5 minutes
