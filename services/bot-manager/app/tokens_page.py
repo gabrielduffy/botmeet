@@ -182,7 +182,10 @@ TOKENS_PAGE_HTML = """<!DOCTYPE html>
 
             try {
                 const res = await fetch('/api/tokens/', {
-                    headers: { 'Authorization': `Bearer ${authToken}` }
+                    headers: { 
+                        'Authorization': `Bearer ${authToken}`,
+                        'X-API-Key': authToken
+                    }
                 });
 
                 if (!res.ok) {
@@ -228,7 +231,10 @@ TOKENS_PAGE_HTML = """<!DOCTYPE html>
             try {
                 const res = await fetch('/api/tokens/', {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${authToken}` }
+                    headers: { 
+                        'Authorization': `Bearer ${authToken}`,
+                        'X-API-Key': authToken
+                    }
                 });
 
                 if (!res.ok) throw new Error('Falha ao criar token');
@@ -253,7 +259,10 @@ TOKENS_PAGE_HTML = """<!DOCTYPE html>
             try {
                 const res = await fetch(`/api/tokens/${tokenId}`, {
                     method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${authToken}` }
+                    headers: { 
+                        'Authorization': `Bearer ${authToken}`,
+                        'X-API-Key': authToken
+                    }
                 });
 
                 if (!res.ok) {
