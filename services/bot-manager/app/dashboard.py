@@ -1,6 +1,7 @@
 import psutil
 import os
 import asyncio
+from datetime import datetime
 from typing import Dict, Any, List
 import logging
 from .orchestrator_utils import get_socket_session, stop_bot_container
@@ -119,3 +120,39 @@ async def remove_exited_containers() -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Erro ao remover containers: {e}")
         return {"success": False, "error": str(e)}
+
+async def get_meeting_history(limit: int = 50) -> List[Dict[str, Any]]:
+    """Busca o histórico de reuniões no banco de dados."""
+    try:
+        from shared_models.database import async_session_local
+        from shared_models.models import Meeting
+        from sqlalchemy.future import select
+        from sqlalchemy import desc
+        
+        async with async_session_local() as db:
+            stmt = select(Meeting).order_by(desc(Meeting.created_at)).limit(limit)
+            result = await db.execute(stmt)
+            meetings = result.scalars().all()
+            
+            history = []
+            for m in meetings:
+                # Calcula duração se possível
+                duration = None
+                if m.start_time and m.end_time:
+                    duration = int((m.end_time - m.start_time).total_seconds())
+                elif m.start_time:
+                    duration = int((datetime.utcnow() - m.start_time).total_seconds())
+
+                history.append({
+                    "id": m.id,
+                    "platform": m.platform,
+                    "native_id": m.platform_specific_id,
+                    "status": m.status,
+                    "created_at": m.created_at.isoformat() if m.created_at else None,
+                    "duration": duration,
+                    "webhook_sent": m.data.get('webhook_status') == 'success' if m.data else False
+                })
+            return history
+    except Exception as e:
+        logger.error(f"Erro ao buscar histórico: {e}")
+        return []

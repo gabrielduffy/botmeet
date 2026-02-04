@@ -105,6 +105,7 @@ def start_bot(meet_url):
     options.add_argument('--use-fake-ui-for-media-stream')
     options.add_argument('--use-fake-device-for-media-stream')
     options.add_argument('--window-size=1280,720')
+    options.add_argument('--mute-audio') # Silencia a saída de áudio do navegador para evitar eco
     # options.binary_location = '/usr/bin/chromium' # Removido para usar autodeteccao ou browser_executable_path
     
     # Proxy
@@ -213,7 +214,31 @@ def start_bot(meet_url):
                 pass
 
         if clicked or "meet.google.com" in driver.current_url:
-            logger.info("Bot confirmado na reunião. Iniciando transcrição via GROQ...")
+            logger.info("Bot confirmado na reunião. Garantindo que estamos mudos...")
+            
+            # Tenta silenciar microfone e câmera logo após entrar
+            try:
+                # Comandos para silenciar (pressionar Ctrl+D para mic e Ctrl+E para câmera é o padrão do Meet)
+                from selenium.webdriver.common.keys import Keys
+                body = driver.find_element(By.TAG_NAME, "body")
+                body.send_keys(Keys.CONTROL + "d") # Muta mic
+                body.send_keys(Keys.CONTROL + "e") # Muta camera
+                logger.info("Enviado comandos de atalho para mutar mic/cam.")
+                
+                # Clique redundante nos botões se eles estiverem ativos
+                mute_btns = driver.find_elements(By.CSS_SELECTOR, "div[aria-label*='Desativar microfone'], div[aria-label*='Turn off microphone']")
+                for btn in mute_btns:
+                    try: btn.click()
+                    except: pass
+                
+                cam_btns = driver.find_elements(By.CSS_SELECTOR, "div[aria-label*='Desativar câmera'], div[aria-label*='Turn off camera']")
+                for btn in cam_btns:
+                    try: btn.click()
+                    except: pass
+            except Exception as em:
+                logger.warning(f"Erro ao tentar mutar na entrada: {em}")
+
+            logger.info("Iniciando transcrição via GROQ...")
             
             groq_api_key = os.environ.get("GROQ_API_KEY")
             if not groq_api_key:

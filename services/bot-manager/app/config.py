@@ -2,7 +2,7 @@ import os
 
 REDIS_URL = os.environ.get("REDIS_URL")
 if not REDIS_URL:
-    raise ValueError("Missing required environment variable: REDIS_URL")
+    logging.error("Missing required environment variable: REDIS_URL. System will fail on Redis operations.")
 
 # Bot configuration
 BOT_IMAGE_NAME = os.environ.get("BOT_IMAGE_NAME", "easypanel/sortebem/bot:latest")

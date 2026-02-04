@@ -28,44 +28,52 @@ const processedMeetings = new Set();
 // PROXY PARA O DASHBOARD (BOT-MANAGER)
 // ═══════════════════════════════════════════════════════════════════
 
-const BOT_MANAGER_INTERNAL_URL = process.env.BOT_MANAGER_URL || 'http://sortebem_bot:8080';
+const BOT_MANAGER_INTERNAL_URL = process.env.BOT_MANAGER_URL || 'http://sortebem_bot:3000';
 
 // Dashboard Principal
 app.get('/', async (req, res) => {
-  // No modo unificado do docker-entrypoint.sh, a API roda no mesmo container
-  const possibleHosts = [
-    'http://127.0.0.1:8080',
-    'http://bot-manager:8080',
-    'http://sortebem_bot:8080'
-  ];
+  // Prioritize the configured internal URL
+  const target = BOT_MANAGER_INTERNAL_URL.endsWith('/') ? BOT_MANAGER_INTERNAL_URL : BOT_MANAGER_INTERNAL_URL + '/';
 
-  let lastError = null;
+  try {
+    logger.info(`[Proxy] Tentando conexão com Dashboard: ${target}`);
+    const response = await axios.get(target, { timeout: 5000 });
+    return res.send(response.data);
+  } catch (error) {
+    logger.error(`[Proxy] Falha ao conectar em ${target}: ${error.message}`);
 
-  for (const host of possibleHosts) {
-    try {
-      logger.info(`[Proxy] Tentando conexão com: ${host}`);
-      const response = await axios.get(host + '/', { timeout: 3000 });
-      return res.send(response.data);
-    } catch (error) {
-      lastError = error;
-      logger.warn(`[Proxy] Falha ao conectar em ${host}: ${error.message}`);
+    // Fallback if the primary target fails - try common internal defaults
+    const fallbacks = [
+      'http://bot-manager:8080/',
+      'http://sortebem_bot:8080/',
+      'http://localhost:8080/'
+    ];
+
+    for (const host of fallbacks) {
+      if (host === target) continue;
+      try {
+        logger.info(`[Proxy Fallback] Tentando: ${host}`);
+        const response = await axios.get(host, { timeout: 2000 });
+        return res.send(response.data);
+      } catch (e) {
+        logger.warn(`[Proxy Fallback] Falha em ${host}: ${e.message}`);
+      }
     }
-  }
 
-  logger.error(`[Proxy] Todas as tentativas de conexão falharam. Último erro: ${lastError.message}`);
-  res.status(500).send(`
-    <body style="background:#09090b; color:#fafafa; font-family:sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0;">
-      <div style="text-align:center; padding: 20px;">
-        <h1 style="color:#ef4444;">Sistema em Deploy ou Offline</h1>
-        <p style="color:#a1a1aa; margin-bottom: 20px;">O Bot Manager (sortebem_bot) não foi encontrado na rede interna.</p>
-        <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:8px; font-family:monospace; font-size:12px; margin-bottom:20px; text-align:left;">
-          Erro Técnico: ${lastError.message}<br>
-          Target: sortebem_bot:8080
+    res.status(500).send(`
+      <body style="background:#09090b; color:#fafafa; font-family:sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0;">
+        <div style="text-align:center; padding: 20px;">
+          <h1 style="color:#ef4444;">Sistema em Deploy ou Offline</h1>
+          <p style="color:#a1a1aa; margin-bottom: 20px;">O Bot Manager (${target}) não respondeu.</p>
+          <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:8px; font-family:monospace; font-size:12px; margin-bottom:20px; text-align:left;">
+            Erro Técnico: ${error.message}<br>
+            Target Configurado: ${BOT_MANAGER_INTERNAL_URL}
+          </div>
+          <button onclick="location.reload()" style="background:#3b82f6; border:none; color:white; padding:12px 24px; border-radius:8px; cursor:pointer; font-weight:600;">Verificar Novamente</button>
         </div>
-        <button onclick="location.reload()" style="background:#3b82f6; border:none; color:white; padding:12px 24px; border-radius:8px; cursor:pointer; font-weight:600;">Verificar Novamente</button>
-      </div>
-    </body>
-  `);
+      </body>
+    `);
+  }
 });
 
 // Tokens Management Page

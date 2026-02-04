@@ -34,7 +34,9 @@ if not all([DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD]):
         }.items()
         if not var_value
     ]
-    raise ValueError(f"Missing required database environment variables: {', '.join(missing_vars)}")
+    logger.critical(f"FATAL: Missing required database environment variables: {', '.join(missing_vars)}")
+    # We don't raise here to allow the process to start and respond to health checks/dashboard
+    # though any DB operation will subsequently fail.
 
 # Build connection URLs with SSL support
 # For asyncpg: SSL is handled via connect_args, not URL query parameters

@@ -1,5 +1,5 @@
-import uvicorn
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, status
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, status, Request
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import logging
@@ -42,13 +42,13 @@ try:
     from .dashboard import (
         get_system_stats, get_all_containers_status, 
         kill_all_bots, restart_container, stop_single_container,
-        remove_exited_containers
+        remove_exited_containers, get_meeting_history
     )
+    from .templates import DASHBOARD_HTML, DOCS_HTML
     DASHBOARD_AVAILABLE = True
 except Exception as e:
-    logging.error(f"Dashboard components failed to load: {e}")
+    logging.error(f"Dashboard components or templates failed to load: {e}")
     DASHBOARD_AVAILABLE = False
-from fastapi.responses import HTMLResponse
 from app.routes.tokens import router as tokens_router
 from app.routes.templates import router as templates_router
 from app.tokens_page import TOKENS_PAGE_HTML
@@ -90,14 +90,7 @@ async def update_meeting_status(
         await db.commit()
     
     # Validate transition
-    # #region agent log
-    try:
-        with open('/home/dima/dev/.cursor/debug.log', 'a') as f:
-            import json
-            f.write(json.dumps({"location": "bot-manager/main.py:79", "message": "Validating status transition", "data": {"meeting_id": meeting.id, "current_status": current_status.value, "new_status": new_status.value}, "timestamp": __import__('time').time(), "sessionId": "debug-session", "runId": "run1", "hypothesisId": "D"}) + "\n")
-    except: pass
-    # #endregion
-    
+    # Status transition validation logic
     if not is_valid_status_transition(current_status, new_status):
         logger.warning(f"Invalid status transition from '{current_status.value}' to '{new_status.value}' for meeting {meeting.id}")
         logger.error(f"[DEBUG] Invalid transition: current='{current_status.value}', requested='{new_status.value}', meeting_id={meeting.id}")
@@ -441,430 +434,7 @@ async def _delayed_container_stop(container_id: str, meeting_id: int, delay_seco
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def root():
-    html_content = """
-    <!DOCTYPE html>
-    <html lang="pt-br">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>BotMeet | Admin Command Center</title>
-        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
-        <style>
-            :root {
-                --primary: #8b5cf6;
-                --primary-dark: #6d28d9;
-                --bg: #050505;
-                --card-bg: rgba(18, 18, 22, 0.7);
-                --border: rgba(139, 92, 246, 0.2);
-                --text: #ffffff;
-                --text-muted: #94a3b8;
-                --danger: #ef4444;
-                --success: #10b981;
-                --warning: #f59e0b;
-                --radius: 12px;
-            }
-
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { 
-                background: var(--bg); 
-                color: var(--text); 
-                font-family: 'Poppins', sans-serif; 
-                line-height: 1.5; 
-                -webkit-font-smoothing: antialiased;
-                background-image: 
-                    radial-gradient(circle at 0% 0%, rgba(109, 40, 149, 0.15) 0%, transparent 40%),
-                    radial-gradient(circle at 100% 100%, rgba(76, 29, 149, 0.1) 0%, transparent 40%);
-                background-attachment: fixed;
-            }
-
-            .container { max-width: 1400px; margin: 0 auto; padding: 2rem 1.5rem; }
-
-            /* Header Section */
-            header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3rem; flex-wrap: wrap; gap: 1rem; }
-            .brand { display: flex; align-items: center; gap: 0.75rem; }
-            .brand .icon { width: 12px; height: 12px; background: var(--primary); border-radius: 50%; box-shadow: 0 0 15px var(--primary); animation: pulse 2s infinite; }
-            .brand h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
-
-            @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1); } }
-
-            .badge-online { display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); color: var(--success); padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.85rem; font-weight: 600; }
-
-            /* Stats Grid */
-            .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-bottom: 3rem; }
-            .stat-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; backdrop-filter: blur(10px); transition: transform 0.3s ease, border-color 0.3s ease; }
-            .stat-card:hover { border-color: var(--primary); transform: translateY(-3px); }
-            .stat-card h3 { color: var(--text-muted); font-size: 0.85rem; font-weight: 500; text-transform: uppercase; margin-bottom: 1rem; }
-            .stat-value { font-size: 2.25rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--text); }
-            .stat-progress { height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; margin-top: 1rem; overflow: hidden; }
-            .stat-progress-inner { height: 100%; background: linear-gradient(90deg, var(--primary-dark), var(--primary)); width: 0%; transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
-
-            /* Table Section */
-            .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-            .section-header h2 { font-size: 1.25rem; font-weight: 600; }
-
-            .table-container { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); overflow-x: auto; backdrop-filter: blur(10px); }
-            table { width: 100%; border-collapse: collapse; min-width: 800px; }
-            th { text-align: left; padding: 1rem 1.5rem; color: var(--text-muted); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; border-bottom: 1px solid var(--border); }
-            td { padding: 1.25rem 1.5rem; font-size: 0.9rem; border-bottom: 1px solid var(--border); }
-            tr:last-child td { border-bottom: none; }
-            
-            .id-badge { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; background: rgba(255,255,255,0.05); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--primary); }
-            .container-name { font-weight: 600; }
-            .image-badge { font-size: 0.75rem; color: var(--text-muted); }
-            
-            .status-pill { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem; font-weight: 500; }
-            .status-running { background: rgba(16, 185, 129, 0.1); color: var(--success); }
-            .status-exited { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
-
-            /* Actions */
-            .action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 3rem; }
-            .action-card { background: linear-gradient(135deg, rgba(139, 92, 246, 0.05), rgba(76, 29, 149, 0.05)); border: 1px dashed var(--border); border-radius: var(--radius); padding: 1.5rem; display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; }
-            .action-info h4 { font-size: 1rem; margin-bottom: 0.25rem; }
-            .action-info p { font-size: 0.8rem; color: var(--text-muted); }
-
-            /* Buttons */
-            .btn { display: inline-flex; align-items: center; justify-content: center; padding: 0.6rem 1.2rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; border: none; transition: all 0.2s; gap: 0.5rem; font-family: inherit; }
-            .btn-primary { background: var(--primary); color: white; }
-            .btn-primary:hover { background: var(--primary-dark); box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3); }
-            .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
-            .btn-outline:hover { background: rgba(255,255,255,0.05); border-color: var(--primary); }
-            .btn-danger { background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.2); }
-            .btn-danger:hover { background: var(--danger); color: white; }
-            .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; border-radius: 6px; }
-
-            /* Toast */
-            #toast { position: fixed; bottom: 2rem; right: 2rem; padding: 1rem 1.5rem; background: var(--primary-dark); color: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); transform: translateY(150%); transition: transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28); z-index: 1000; border: 1px solid var(--primary); }
-            #toast.show { transform: translateY(0); }
-
-            /* Responsive Adjustments */
-            @media (max-width: 768px) {
-                .container { padding: 1rem; }
-                header { margin-bottom: 2rem; }
-                .stats-grid { gap: 1rem; }
-                .action-card { flex-direction: column; text-align: center; }
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <header>
-                <div class="brand">
-                    <div class="icon"></div>
-                    <h1>BOTMEET COMMAND</h1>
-                </div>
-                <div style="display: flex; align-items: center; gap: 1rem;">
-                    <a href="/tokens" class="btn btn-outline" style="text-decoration: none;">🔑 API Tokens</a>
-                    <div class="badge-online">
-                        <div style="width: 8px; height: 8px; background: var(--success); border-radius: 50%;"></div>
-                        INFRA OK
-                    </div>
-                </div>
-            </header>
-
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <h3>Processamento CPU</h3>
-                    <div class="stat-value" id="cpu-val">--%</div>
-                    <div class="stat-progress"><div class="stat-progress-inner" id="cpu-bar"></div></div>
-                </div>
-                <div class="stat-card">
-                    <h3>Memória RAM</h3>
-                    <div class="stat-value" id="mem-val">--%</div>
-                    <div class="stat-progress"><div class="stat-progress-inner" id="mem-bar"></div></div>
-                </div>
-                <div class="stat-card">
-                    <h3>Uso de Disco</h3>
-                    <div class="stat-value" id="disk-val">--%</div>
-                    <div class="stat-progress"><div class="stat-progress-inner" id="disk-bar"></div></div>
-                </div>
-            </div>
-
-            <!-- Launcher Section -->
-            <div class="stat-card" style="margin-bottom: 2rem; border-style: solid; border-width: 2px;">
-                <h3 style="color: var(--primary); font-weight: 700;">🚀 Lançar Novo Bot (Quick Launch)</h3>
-                <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.5rem;">Cole o link do Google Meet abaixo para enviar o bot automaticamente.</p>
-                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                    <input type="text" id="meet-url" placeholder="https://meet.google.com/abc-defg-hij" style="flex: 1; min-width: 300px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; padding: 0.8rem 1.2rem; color: var(--text); font-family: inherit;">
-                    <button class="btn btn-primary" onclick="launchBot()" id="btn-launch" style="padding: 0.8rem 2rem;">ENTRAR NA REUNIÃO</button>
-                </div>
-                <div id="launch-status" style="margin-top: 1rem; font-size: 0.85rem; display: none;"></div>
-            </div>
-
-            <!-- Terminal/Logs Section -->
-            <div class="stat-card" style="margin-bottom: 3rem; background: #000; border: 1px solid #333; height: 300px; display: flex; flex-direction: column;">
-                <div style="padding: 0.5rem 1rem; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; background: #111;">
-                    <span style="font-size: 0.7rem; color: #888; font-weight: bold; letter-spacing: 1px;">📡 LIVE BOT TERMINAL (LOGS EM TEMPO REAL)</span>
-                    <button class="btn btn-outline btn-sm" onclick="document.getElementById('live-logs').innerHTML = ''" style="font-size: 0.6rem; padding: 2px 8px;">Clear</button>
-                </div>
-                <div id="live-logs" style="flex: 1; overflow-y: auto; padding: 1rem; font-family: 'Courier New', Courier, monospace; font-size: 0.85rem; color: #0f0; line-height: 1.4;">
-                    [SISTEMA] Aguardando lançamento de bot para iniciar monitoramento...
-                </div>
-            </div>
-
-            <div class="section-header">
-                <h2>Recursos em Operação</h2>
-                <div style="display: flex; gap: 0.5rem;">
-                    <button class="btn btn-outline" onclick="cleanupExited()" style="color:var(--warning); border-color:var(--warning);">Limpar Parados</button>
-                    <button class="btn btn-outline" onclick="loadContainers()">Recarregar</button>
-                </div>
-            </div>
-
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Identificador</th>
-                            <th>NOME DO container</th>
-                            <th>Imagem</th>
-                            <th>Status atual</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="container-body">
-                        <tr><td colspan="5" style="text-align: center; padding: 3rem; color: var(--text-muted);">Consultando infraestrutura...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="action-grid">
-                <div class="action-card">
-                    <div class="action-info">
-                        <h4>Limpeza Geral</h4>
-                        <p>Elimina todos os bots de reunião ativos.</p>
-                    </div>
-                    <button class="btn btn-danger" onclick="killBots()">KIll ALL BOTS</button>
-                </div>
-                <div class="action-card">
-                    <div class="action-info">
-                        <h4>Manutenção Rápida</h4>
-                        <p>Reinicia serviços principais se necessário.</p>
-                    </div>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-outline btn-sm" onclick="restartService('bot-manager')">BOT MGMT</button>
-                        <button class="btn btn-outline btn-sm" onclick="restartService('whisperlive')">WHISPER</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div id="toast">Ação executada com sucesso</div>
-
-        <script>
-            function showToast(msg) {
-                const t = document.getElementById('toast');
-                t.innerText = msg;
-                t.classList.add('show');
-                setTimeout(() => t.classList.remove('show'), 3000);
-            }
-
-            function appendLog(msg, type = 'info', skipTime = false) {
-                const logs = document.getElementById('live-logs');
-                const entry = document.createElement('div');
-                const time = skipTime ? "" : `<span style="color: #444;">[${new Date().toLocaleTimeString()}]</span> `;
-                
-                let color = '#0f0'; // Default green
-                if (type === 'error') color = '#f00';
-                if (type === 'system') color = '#888';
-                if (type === 'warn') color = '#ff0';
-
-                entry.innerHTML = `${time}<span style="color: ${color};">${msg}</span>`;
-                logs.appendChild(entry);
-                logs.scrollTop = logs.scrollHeight;
-            }
-
-            let logPollingInterval = null;
-            function startLogPolling(meetingId) {
-                if (logPollingInterval) clearInterval(logPollingInterval);
-                const logDiv = document.getElementById('live-logs');
-                logDiv.innerHTML = '';
-                appendLog(`🚀 [SISTEMA] Iniciando monitoramento em tempo real... ID: ${meetingId}`, 'system');
-                
-                logPollingInterval = setInterval(async () => {
-                    try {
-                        const res = await fetch(`/api/admin/logs/${meetingId}`);
-                        const data = await res.json();
-                        if (data.logs && data.logs.length > 0) {
-                            logDiv.innerHTML = '';
-                            data.logs.forEach(log => {
-                                // Os logs do Docker já são mensagens completas
-                                appendLog(log.msg, log.type || 'info', true);
-                            });
-                        }
-                    } catch (e) { console.error("Log poll error", e); }
-                }, 2000);
-            }
-
-            async function launchBot() {
-                const urlInput = document.getElementById('meet-url');
-                const btn = document.getElementById('btn-launch');
-                const status = document.getElementById('launch-status');
-                const url = urlInput.value.trim();
-
-                if (!url) {
-                    showToast("Por favor, cole o link da reunião");
-                    return;
-                }
-
-                btn.disabled = true;
-                btn.innerText = "LANÇANDO...";
-                status.style.display = 'block';
-                status.style.color = 'var(--text-muted)';
-                status.innerText = "Processando link e lançando bot...";
-                appendLog(`Lançando bot para: ${url}`);
-
-                try {
-                    const regex = /meet\.google\.com\/([a-z0-9-]+)/i;
-                    const match = url.match(regex);
-                    const meetingId = match ? match[1] : url.split('/').pop();
-
-                    const res = await fetch('/bots', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            platform: "google_meet",
-                            native_meeting_id: meetingId
-                        })
-                    });
-
-                    const data = await res.json();
-
-                    if (res.ok) {
-                        status.style.color = 'var(--success)';
-                        status.innerText = `✅ Sucesso! Bot lançado com ID: ${data.id}.`;
-                        appendLog(`✅ Bot aceito pelo orquestrador. ID da reunião no banco: ${data.id}`, 'success');
-                        urlInput.value = '';
-                        startLogPolling(data.id);
-                        setTimeout(loadContainers, 2000);
-                    } else {
-                        status.style.color = 'var(--danger)';
-                        let msg = data.detail ? (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)) : JSON.stringify(data);
-                        status.innerText = `❌ Erro: ${msg}`;
-                        appendLog(`❌ Erro no lançamento: ${msg}`, 'error');
-                    }
-                } catch (e) {
-                    status.style.color = 'var(--danger)';
-                    status.innerText = `❌ Falha: ${e.message}`;
-                    appendLog(`❌ Falha na comunicação: ${e.message}`, 'error');
-                } finally {
-                    btn.disabled = false;
-                    btn.innerText = "ENTRAR NA REUNIÃO";
-                }
-            }
-
-            async function updateStats() {
-                try {
-                    const res = await fetch('/api/admin/stats');
-                    const data = await res.json();
-                    if (data.error) return;
-
-                    const cpu = data.cpu_percent.toFixed(1);
-                    const mem = data.memory.percent.toFixed(1);
-                    const disk = data.disk.percent.toFixed(1);
-
-                    document.getElementById('cpu-val').innerText = cpu + '%';
-                    document.getElementById('cpu-bar').style.width = cpu + '%';
-                    
-                    document.getElementById('mem-val').innerText = mem + '%';
-                    document.getElementById('mem-bar').style.width = mem + '%';
-                    
-                    document.getElementById('disk-val').innerText = disk + '%';
-                    document.getElementById('disk-bar').style.width = disk + '%';
-                } catch (e) {
-                    console.error("Stats fail", e);
-                }
-            }
-
-            async function loadContainers() {
-                try {
-                    const res = await fetch('/api/admin/containers');
-                    const data = await res.json();
-                    const tbody = document.getElementById('container-body');
-                    tbody.innerHTML = '';
-                    
-                    if (!data || data.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">Nenhum processo detectado.</td></tr>';
-                        return;
-                    }
-
-                    data.forEach(c => {
-                        // Esconde infra básica (DBs/Redis) se não for solicitado
-                        const isMainService = ['bot-manager', 'whisper', 'vexa-bot', 'admin-api', 'api-gateway', 'sortebem'].some(term => c.name.toLowerCase().includes(term));
-                        if (!isMainService && !c.name.includes('vexa-bot')) return;
-
-                        const tr = document.createElement('tr');
-                        const statusClass = c.state === 'running' ? 'status-running' : 'status-exited';
-                        const isVexaBot = c.name.toLowerCase().includes('vexa-bot');
-                        
-                        // Encurta o nome do container para o Easypanel
-                        let displayName = c.name;
-                        if (displayName.length > 30) {
-                            displayName = displayName.split('.')[0] + '...' + displayName.slice(-8);
-                        }
-
-                        tr.innerHTML = `
-                            <td><span class="id-badge">${c.id}</span></td>
-                            <td><div class="container-name" title="${c.name}">${displayName}</div></td>
-                            <td><div class="image-badge">${c.image.split(':')[0]}</div></td>
-                            <td><span class="status-pill ${statusClass}">${c.status}</span></td>
-                            <td>
-                                ${isVexaBot && c.state === 'running' ? `<button class="btn btn-danger btn-sm" onclick="stopContainer('${c.id}')">PARAR</button>` : '<span style="color:var(--text-muted)">-</span>'}
-                            </td>
-                        `;
-                        tbody.appendChild(tr);
-                    });
-                } catch (e) {
-                    console.error("Containers fail", e);
-                }
-            }
-
-            async function killBots() {
-                if (!confirm("Confirmar encerramento de todos os robôs?")) return;
-                try {
-                    const res = await fetch('/api/admin/kill-bots', { method: 'POST' });
-                    const data = await res.json();
-                    showToast(`${data.killed || 0} bots removidos.`);
-                    loadContainers();
-                } catch(e) { showToast("Erro ao processar"); }
-            }
-
-            async function cleanupExited() {
-                try {
-                    const res = await fetch('/api/admin/cleanup', { method: 'POST' });
-                    const data = await res.json();
-                    showToast(`${data.removed || 0} containers mortos removidos.`);
-                    loadContainers();
-                } catch(e) { showToast("Erro ao limpar"); }
-            }
-
-            async function stopContainer(id) {
-                if (!confirm("Parar este bot?")) return;
-                try {
-                    const res = await fetch(`/api/admin/stop/${id}`, { method: 'POST' });
-                    const data = await res.json();
-                    if (data.success) {
-                        showToast("Bot interrompido");
-                        loadContainers();
-                    } else showToast(data.error || "Erro");
-                } catch(e) { showToast("Erro na requisição"); }
-            }
-
-            async function restartService(name) {
-                if (!confirm(`Reiniciar o serviço ${name}?`)) return;
-                try {
-                    await fetch(`/api/admin/restart/${name}`, { method: 'POST' });
-                    showToast(`Reinício solicitado para ${name}`);
-                } catch(e) { showToast("Erro ao solicitar"); }
-            }
-
-            setInterval(updateStats, 3000);
-            setInterval(loadContainers, 10000);
-            updateStats();
-            loadContainers();
-        </script>
-    </body>
-    </html>
-    """
-    return html_content
+    return HTMLResponse(content=DASHBOARD_HTML)
 
 @app.get("/api/admin/stats", include_in_schema=False)
 async def admin_stats():
@@ -901,6 +471,24 @@ async def admin_cleanup():
     if not DASHBOARD_AVAILABLE:
         return {"success": False, "error": "Dashboard modules not loaded"}
     return await remove_exited_containers()
+
+@app.get("/api/admin/history", include_in_schema=False)
+async def admin_history():
+    if not DASHBOARD_AVAILABLE:
+        return []
+    return await get_meeting_history()
+
+@app.get("/api/admin/transcription/{meeting_id}", include_in_schema=False)
+async def admin_transcription(meeting_id: int, db: AsyncSession = Depends(get_db)):
+    """Busca as transcrições de uma reunião específica."""
+    stmt = select(Transcription).where(Transcription.meeting_id == meeting_id).order_by(Transcription.start_time)
+    result = await db.execute(stmt)
+    transcriptions = result.scalars().all()
+    return transcriptions
+
+@app.get("/docs", response_class=HTMLResponse, include_in_schema=False)
+async def public_docs():
+    return HTMLResponse(content=DOCS_HTML)
 
 @app.get("/tokens", response_class=HTMLResponse, include_in_schema=False)
 async def tokens_page():
@@ -1845,13 +1433,7 @@ async def bot_status_change_callback(
     new_status = payload.status
     reason = payload.reason
 
-    # #region agent log
-    try:
-        with open('/home/dima/dev/.cursor/debug.log', 'a') as f:
-            import json
-            f.write(json.dumps({"location": "bot-manager/main.py:1320", "message": "Unified callback received", "data": {"connection_id": session_uid, "new_status": new_status.value, "reason": reason}, "timestamp": __import__('time').time(), "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-    except: pass
-    # #endregion
+    # Unified callback received
 
     try:
         # Find the meeting session to get the meeting_id
@@ -1958,33 +1540,15 @@ async def bot_status_change_callback(
                 
         else:
             # Handle other status changes (joining, awaiting_admission)
-            # #region agent log
-            try:
-                with open('/home/dima/dev/.cursor/debug.log', 'a') as f:
-                    import json
-                    f.write(json.dumps({"location": "bot-manager/main.py:1423", "message": "Before update_meeting_status", "data": {"meeting_id": meeting_id, "old_status": meeting.status, "new_status": new_status.value}, "timestamp": __import__('time').time(), "sessionId": "debug-session", "runId": "run1", "hypothesisId": "B"}) + "\n")
-            except: pass
-            # #endregion
+            # Before update_meeting_status
             
             success = await update_meeting_status(meeting, new_status, db)
             
-            # #region agent log
-            try:
-                with open('/home/dima/dev/.cursor/debug.log', 'a') as f:
-                    import json
-                    f.write(json.dumps({"location": "bot-manager/main.py:1429", "message": "After update_meeting_status", "data": {"meeting_id": meeting_id, "success": success, "meeting_status": meeting.status}, "timestamp": __import__('time').time(), "sessionId": "debug-session", "runId": "run1", "hypothesisId": "B"}) + "\n")
-            except: pass
-            # #endregion
+            # After update_meeting_status
             
             if not success:
                 logger.error(f"Bot status change callback: Failed to update meeting {meeting_id} status to '{new_status.value}'")
-                # #region agent log
-                try:
-                    with open('/home/dima/dev/.cursor/debug.log', 'a') as f:
-                        import json
-                        f.write(json.dumps({"location": "bot-manager/main.py:1435", "message": "Status update failed", "data": {"meeting_id": meeting_id, "old_status": old_status, "new_status": new_status.value}, "timestamp": __import__('time').time(), "sessionId": "debug-session", "runId": "run1", "hypothesisId": "C"}) + "\n")
-                except: pass
-                # #endregion
+                # Status update failed
                 return {"status": "error", "detail": "Failed to update meeting status"}
 
         # Publish meeting status change via Redis Pub/Sub
