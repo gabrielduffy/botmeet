@@ -714,5 +714,11 @@ class UserAnalyticsResponse(BaseModel):
     user: UserDetailResponse  # This includes the data field
     meeting_stats: UserMeetingStats
     usage_patterns: UserUsagePatterns
+
+class BotStatusChangePayload(BaseModel):
+    connection_id: str = Field(..., description="The connection ID of the bot session.")
+    status: MeetingStatus = Field(..., description="The new status of the bot.")
+    reason: Optional[str] = Field(None, description="The reason for the status change.")
+    error_details: Optional[str] = Field(None, description="Optional error details.")
     api_tokens: Optional[List[TokenResponse]]  # Optional for security
 # --- END Analytics Schemas --- 

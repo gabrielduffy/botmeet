@@ -31,7 +31,7 @@ from shared_models.models import User, Meeting, MeetingSession, Transcription # 
 from shared_models.schemas import (
     MeetingCreate, MeetingResponse, Platform, BotStatusResponse, MeetingConfigUpdate,
     MeetingStatus, MeetingCompletionReason, MeetingFailureStage,
-    is_valid_status_transition, get_status_source
+    is_valid_status_transition, get_status_source, BotStatusChangePayload
 ) # Import new schemas, Platform, and status enums
 from app.auth import get_user_and_token # MODIFIED
 from sqlalchemy.ext.asyncio import AsyncSession
