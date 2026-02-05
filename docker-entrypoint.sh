@@ -41,13 +41,13 @@ echo "📡 [Vexa] Ligando Motores (Modo Unificado)..."
 export PYTHONPATH="/app:/app/services/bot-manager:/app/services/admin-api:/app/services/api-gateway:$PYTHONPATH"
 
 echo ">>> 🚀 Admin API (8001)..."
-cd /app/services/admin-api && /opt/vexa-env/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8001 &
+(cd /app/services/admin-api && /opt/vexa-env/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8001) &
 
 echo ">>> 🚀 Bot Manager (8080)..."
-cd /app/services/bot-manager && /opt/vexa-env/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8080 &
+(cd /app/services/bot-manager && /opt/vexa-env/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8080) &
 
 echo ">>> 🚀 API Gateway (8000)..."
-cd /app/services/api-gateway && /opt/vexa-env/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+(cd /app/services/api-gateway && /opt/vexa-env/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8000) &
 
 # Verificar se os processos estão rodando
 sleep 5
