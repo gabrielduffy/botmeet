@@ -53,7 +53,13 @@ RUN python3 -m venv /opt/vexa-env && \
     asyncpg \
     databases[asyncpg] \
     alembic \
-    psycopg2-binary
+    psycopg2-binary \
+    psutil \
+    email-validator
+
+# Copiar e instalar a biblioteca compartilhada (Crítico)
+COPY libs/shared-models /app/libs/shared-models
+RUN /opt/vexa-env/bin/pip install -e /app/libs/shared-models
 
 WORKDIR /app
 
