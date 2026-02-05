@@ -60,16 +60,28 @@ app.get('/', async (req, res) => {
       }
     }
 
-    res.status(500).send(`
+    // Use 200 instead of 500 so Easypanel Health Check doesn't kill the route
+    res.status(200).send(`
       <body style="background:#09090b; color:#fafafa; font-family:sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0;">
-        <div style="text-align:center; padding: 20px;">
-          <h1 style="color:#ef4444;">Sistema em Deploy ou Offline</h1>
-          <p style="color:#a1a1aa; margin-bottom: 20px;">O Bot Manager (${target}) não respondeu.</p>
-          <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:8px; font-family:monospace; font-size:12px; margin-bottom:20px; text-align:left;">
-            Erro Técnico: ${error.message}<br>
-            Target Configurado: ${BOT_MANAGER_INTERNAL_URL}
+        <div style="text-align:center; padding: 20px; max-width: 600px;">
+          <h1 style="color:#ef4444; margin-bottom:10px;">🤖 Gateway Online - Backend Offline</h1>
+          <p style="color:#a1a1aa; margin-bottom: 20px;">O Orquestrador está rodando, mas não conseguiu conectar no Bot Manager.</p>
+          
+          <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:8px; font-family:monospace; font-size:12px; margin-bottom:20px; text-align:left; border: 1px solid rgba(255,255,255,0.1);">
+            <b style="color:#3b82f6;">Status do Proxy:</b><br>
+            Target: ${target}<br>
+            Erro: ${error.message}<br>
+            IP Interno: ${error.address || 'N/A'}
           </div>
-          <button onclick="location.reload()" style="background:#3b82f6; border:none; color:white; padding:12px 24px; border-radius:8px; cursor:pointer; font-weight:600;">Verificar Novamente</button>
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+             <a href="/health" style="text-decoration:none; background:rgba(255,255,255,0.1); color:white; padding:10px; border-radius:6px; font-size:14px;">🔍 Health Check</a>
+             <a href="/logs" style="text-decoration:none; background:rgba(255,255,255,0.1); color:white; padding:10px; border-radius:6px; font-size:14px;">📋 Ver Logs</a>
+          </div>
+
+          <button onclick="location.reload()" style="background:#3b82f6; border:none; color:white; padding:12px 24px; border-radius:8px; cursor:pointer; font-weight:600; width:100%;">Tentar Reconectar</button>
+          
+          <p style="font-size:11px; color:#52525b; margin-top:20px;">Dica: Verifique se o processo Python (8080) iniciou corretamente no SSH.</p>
         </div>
       </body>
     `);
@@ -98,12 +110,15 @@ app.get('/tokens', async (req, res) => {
   }
 
   logger.error(`[Proxy /tokens] Todas as tentativas falharam. Último erro: ${lastError.message}`);
-  res.status(500).send(`
+  res.status(200).send(`
     <body style="background:#09090b; color:#fafafa; font-family:sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0;">
       <div style="text-align:center; padding: 20px;">
         <h1 style="color:#ef4444;">Página de Tokens Indisponível</h1>
-        <p style="color:#a1a1aa; margin-bottom: 20px;">Não foi possível carregar a página de gerenciamento de tokens.</p>
-        <button onclick="location.reload()" style="background:#3b82f6; border:none; color:white; padding:12px 24px; border-radius:8px; cursor:pointer; font-weight:600;">Tentar Novamente</button>
+        <p style="color:#a1a1aa; margin-bottom: 20px;">O microserviço de tokens (Bot Manager 8080) não está respondendo.</p>
+        <div style="display:flex; gap:10px; justify-content:center;">
+          <a href="/" style="text-decoration:none; background:rgba(255,255,255,0.1); color:white; padding:10px 20px; border-radius:6px;">Voltar Home</a>
+          <button onclick="location.reload()" style="background:#3b82f6; border:none; color:white; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:600;">Tentar Novamente</button>
+        </div>
       </div>
     </body>
   `);
