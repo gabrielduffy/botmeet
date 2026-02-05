@@ -42,12 +42,12 @@ echo "📡 [Vexa] Ligando Motores (Gateway & Managers)..."
 pip install -e ./libs/shared-models
 pip install "pydantic[email]" email-validator psutil
 
-# Variáveis para comunicação interna (Unificada)
-export ADMIN_API_URL=http://localhost:8001
-export BOT_MANAGER_URL=http://localhost:8080
-export TRANSCRIPTION_COLLECTOR_URL=http://localhost:8002
-export MCP_URL=http://localhost:8004
-export VEXA_API_URL=http://localhost:8000
+# Variáveis para comunicação interna (Unificada) - RESPEITA AS ENVS DO PAINEL
+export ADMIN_API_URL=${ADMIN_API_URL:-http://localhost:8001}
+export BOT_MANAGER_URL=${BOT_MANAGER_URL:-http://localhost:8080}
+export TRANSCRIPTION_COLLECTOR_URL=${TRANSCRIPTION_COLLECTOR_URL:-http://localhost:8002}
+export MCP_URL=${MCP_URL:-http://localhost:8004}
+export VEXA_API_URL=${VEXA_API_URL:-http://localhost:8000}
 export DB_HOST=${DB_HOST:-sortebem_postgresbot}
 export REDIS_URL=${REDIS_URL:-redis://sortebem_redisbot:6379/0}
 export PYTHONPATH=$PYTHONPATH:/app/services/bot-manager:/app/services/admin-api
