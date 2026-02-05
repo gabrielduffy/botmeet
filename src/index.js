@@ -445,7 +445,13 @@ async function start() {
   logger.info('║           🤖 MEETING BOT - Iniciando...                    ║');
   logger.info('╚════════════════════════════════════════════════════════════╝');
 
-  // Verificar variáveis de ambiente
+  // 1. ABRIR A PORTA IMEDIATAMENTE (Evita "Service is not reachable")
+  app.listen(PORT, () => {
+    logger.info(`[Init] ✅ Servidor rodando na porta ${PORT}`);
+    logger.info('[Init] 🤖 Interface Online - Iniciando módulos de fundo...');
+  });
+
+  // 2. Verificar variáveis de ambiente
   const requiredEnvVars = [
     'GOOGLE_CLIENT_ID',
     'GOOGLE_CLIENT_SECRET',
@@ -456,46 +462,33 @@ async function start() {
   ];
 
   const missing = requiredEnvVars.filter(v => !process.env[v]);
-
   if (missing.length > 0) {
-    logger.error(`[Init] Variáveis de ambiente faltando: ${missing.join(', ')}`);
-    logger.error('[Init] Execute: npm run auth para gerar o GOOGLE_REFRESH_TOKEN');
-    process.exit(1);
+    logger.error(`[Init] ❌ Variáveis faltando: ${missing.join(', ')}`);
+    return; // Não para o processo, mas não deixa prosseguir com o monitoramento
   }
 
-  // Inicializar serviços
+  // 3. Inicializar serviços em background (Sem travar o servidor)
   try {
-    await calendarMonitor.initialize();
-    logger.info('[Init] ✅ Calendar Monitor inicializado');
+    // Inicializar Monitor de Calendário
+    await calendarMonitor.initialize().catch(e => logger.error(`[Init] Erro Calendar: ${e.message}`));
+
+    // Verificar Whisper
+    const whisperOk = await transcriber.checkWhisper().catch(() => false);
+    if (whisperOk) {
+      logger.info('[Init] ✅ Whisper disponível');
+    }
+
+    // Agendar verificação
+    cron.schedule('*/2 * * * *', async () => {
+      try { await checkUpcomingMeetings(); } catch (e) { logger.error(`[Cron] Erro: ${e.message}`); }
+    });
+
+    // Verificação inicial
+    checkUpcomingMeetings().catch(e => logger.error(`[Init] Erro inicial check: ${e.message}`));
+
   } catch (error) {
-    logger.error(`[Init] ❌ Erro ao inicializar Calendar: ${error.message}`);
-    process.exit(1);
+    logger.error(`[Init] Erro em módulos secundários: ${error.message}`);
   }
-
-  // Verificar Whisper
-  const whisperOk = await transcriber.checkWhisper();
-  if (whisperOk) {
-    logger.info('[Init] ✅ Whisper disponível');
-  } else {
-    logger.warn('[Init] ⚠️ Whisper não encontrado - transcrição pode falhar');
-  }
-
-  // Agendar verificação de calendário a cada 2 minutos
-  cron.schedule('*/2 * * * *', () => {
-    checkUpcomingMeetings();
-  });
-  logger.info('[Init] ✅ Cron agendado: verificação a cada 2 minutos');
-
-  // Verificação inicial
-  await checkUpcomingMeetings();
-
-  // Iniciar servidor
-  app.listen(PORT, () => {
-    logger.info(`[Init] ✅ Servidor rodando na porta ${PORT}`);
-    logger.info('[Init] ════════════════════════════════════════');
-    logger.info('[Init] 🤖 Meeting Bot ATIVO e monitorando!');
-    logger.info('[Init] ════════════════════════════════════════');
-  });
 }
 
 // Tratamento de erros não capturados
