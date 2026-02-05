@@ -35,24 +35,25 @@ if [ ! -z "$MEETING_URL" ]; then
 fi
 # -------------------
 
-# 3. Inicia as APIs diretamente no console para você ver o erro real no Easypanel
-echo "🚀 Iniciando Microserviços..."
+# 3. Inicia as APIs diretamente no console
+echo "📡 [Vexa] Ligando Motores (Modo Unificado)..."
 
-# Usamos caminhos absolutos para garantir estabilidade
-export PYTHONPATH=$PYTHONPATH:/app/services/bot-manager:/app/services/admin-api
+export PYTHONPATH="/app:/app/services/bot-manager:/app/services/admin-api:/app/services/api-gateway:$PYTHONPATH"
 
-echo ">>> Ligando Admin API (Porta 8001)..."
-/opt/vexa-env/bin/python3 -m uvicorn app.main:app --app-dir /app/services/admin-api --host 0.0.0.0 --port 8001 &
+echo ">>> 🚀 Admin API (8001)..."
+cd /app/services/admin-api && /opt/vexa-env/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8001 &
 
-echo ">>> Ligando Bot Manager (Porta 8080)..."
-/opt/vexa-env/bin/python3 -m uvicorn app.main:app --app-dir /app/services/bot-manager --host 0.0.0.0 --port 8080 &
+echo ">>> 🚀 Bot Manager (8080)..."
+cd /app/services/bot-manager && /opt/vexa-env/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8080 &
 
-echo ">>> Ligando API Gateway (Porta 8000)..."
-/opt/vexa-env/bin/python3 -m uvicorn services.api-gateway.main:app --host 0.0.0.0 --port 8000 &
+echo ">>> 🚀 API Gateway (8000)..."
+cd /app/services/api-gateway && /opt/vexa-env/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 &
 
-echo "✅ Todos os motores iniciados. Aguardando Node.js..."
-sleep 2
+# Verificar se os processos estão rodando
+sleep 5
+echo "📊 [Status] Verificando processos Python:"
+ps aux | grep uvicorn
 
-# 4. Iniciar o Orquestrador Node.js (Seu Bot)
-echo "🤖 [App] Bot Orquestrador iniciando..."
-exec node src/index.js
+# 4. Iniciar o Orquestrador Node.js (Porta 3000)
+echo "🤖 [App] Iniciando Gateway Node.js na porta 3000..."
+cd /app && exec node src/index.js
