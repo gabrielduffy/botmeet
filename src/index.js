@@ -28,7 +28,7 @@ const processedMeetings = new Set();
 // PROXY PARA O DASHBOARD (BOT-MANAGER)
 // ═══════════════════════════════════════════════════════════════════
 
-const BOT_MANAGER_INTERNAL_URL = process.env.BOT_MANAGER_URL || 'http://sortebem_bot:3000';
+const BOT_MANAGER_INTERNAL_URL = process.env.BOT_MANAGER_URL || 'http://localhost:8080';
 
 // Dashboard Principal
 app.get('/', async (req, res) => {
